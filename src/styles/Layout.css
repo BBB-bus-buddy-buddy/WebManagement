@@ -1,0 +1,109 @@
+/* styles/Layout.css */
+/* 헤더 스타일 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 64px;
+  background-color: #ffffff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  z-index: 100;
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  margin-left: auto; /* 오른쪽 정렬을 위해 추가 */
+}
+
+.user-info span {
+  margin-right: 15px;
+  font-weight: 500;
+}
+
+.user-info a {
+  margin-right: 15px;
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+  
+  .user-info a:hover {
+    color: #0d47a1;
+  }
+  
+  .logout-button {
+    padding: 8px 16px;
+    background-color: transparent;
+    color: #333333;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+  }
+  
+  .logout-button:hover {
+    background-color: #f5f5f5;
+    border-color: #d0d0d0;
+  }
+  
+  /* 사이드바 스타일 */
+  .sidebar {
+    width: 250px;
+    background-color: #ffffff;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    overflow-y: auto;
+    z-index: 99;
+    height: 100vh;
+  }
+  
+  .logo {
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .logo h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #1976d2;
+    font-weight: 600;
+  }
+  
+  .nav-menu {
+    padding: 15px 0;
+  }
+  
+  .nav-menu a {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    color: #333333;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    position: relative;
+    font-weight: 500;
+  }
+  
+  .nav-menu a:hover {
+    background-color: rgba(25, 118, 210, 0.05);
+    color: #1976d2;
+  }
+  
+  .nav-menu a.active {
+    background-color: rgba(25, 118, 210, 0.1);
+    color: #1976d2;
+    border-left: 3px solid #1976d2;
+  }

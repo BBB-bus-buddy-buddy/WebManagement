@@ -1,0 +1,475 @@
+/* styles/Schedule.css */
+.schedule-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 15px 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  }
+  
+  .view-selector {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .view-selector button {
+    padding: 8px 16px;
+    background-color: #f5f5f5;
+    color: #333333;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    font-weight: 500;
+  }
+  
+  .view-selector button:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .view-selector button.active {
+    background-color: #1976d2;
+    color: white;
+  }
+  
+  .date-selector {
+    display: flex;
+    align-items: center;
+  }
+  
+  .date-selector label {
+    margin-right: 10px;
+    font-weight: 500;
+    color: #424242;
+  }
+  
+  .week-selector input, .month-selector input {
+    padding: 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+  }
+  
+  .week-selector input:focus, .month-selector input:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+  }
+  
+  .add-schedule-form {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    margin-bottom: 20px;
+  }
+  
+  .add-schedule-form h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #424242;
+  }
+  
+  .schedule-container {
+    background-color: #ffffff;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    overflow-x: auto;
+  }
+  
+  .schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .schedule-table th, .schedule-table td {
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    text-align: center;
+  }
+  
+  .schedule-table th {
+    background-color: #f8f9fa;
+    font-weight: 500;
+    color: #424242;
+  }
+  
+  .time-column {
+    width: 150px;
+  }
+  
+  .day-column {
+    width: calc(100% / 7);
+    padding: 12px;
+    background-color: #f8f9fa;
+    text-align: center;
+    font-weight: 600;
+  }
+  
+  .time-slot {
+    background-color: #f8f9fa;
+    font-weight: 500;
+    color: #424242;
+  }
+  
+  .time-range {
+    font-size: 12px;
+    font-weight: normal;
+    color: #757575;
+  }
+  
+  .schedule-cell {
+    vertical-align: top;
+    padding: 15px;
+    height: auto;
+    min-height: 200px;
+    border: 1px solid #e0e0e0;
+  }
+  
+  .schedule-item {
+    background-color: rgba(25, 118, 210, 0.1);
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    position: relative;
+    border-left: 3px solid #1976d2;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .schedule-item:last-child {
+    margin-bottom: 0;
+  }
+  
+  .bus-info, .driver-info {
+    margin-bottom: 5px;
+  }
+  
+  .delete-schedule-button {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: transparent;
+    color: #f44336;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+  }
+  .calendar-container {
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+  }
+  
+  .calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .calendar-weekday {
+    padding: 10px;
+    text-align: center;
+    font-weight: 500;
+    color: #424242;
+  }
+  
+  .calendar-body {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .calendar-week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .calendar-day {
+    min-height: 100px;
+    padding: 8px;
+    border-right: 1px solid #e0e0e0;
+    position: relative;
+  }
+  
+  .calendar-day:last-child {
+    border-right: none;
+  }
+  
+  .calendar-day-number {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #757575;
+  }
+  
+  .calendar-day-other-month {
+    background-color: #f5f5f5;
+  }
+  
+  .calendar-day-schedules {
+    margin-top: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .calendar-schedule-item {
+    background-color: rgba(25, 118, 210, 0.1);
+    border-left: 3px solid #1976d2;
+    border-radius: 4px;
+    padding: 5px;
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  
+  .schedule-time {
+    font-size: 10px;
+    color: #757575;
+  }
+  /* 상세 정보 모달 스타일 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #424242;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #757575;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  padding: 8px 20px;
+  border-radius: 4px;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  min-width: 80px; /* 버튼 최소 너비 지정 */
+}
+
+/* 주간 보기 스타일 개선 */
+.hour-column {
+  width: 120px;
+}
+
+.hour-slot {
+  background-color: #f8f9fa;
+  font-weight: 500;
+  color: #424242;
+  text-align: center;
+}
+
+.schedule-item {
+  background-color: rgba(25, 118, 210, 0.1);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 5px;
+  font-size: 12px;
+  position: relative;
+  border-left: 3px solid #1976d2;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.schedule-item:hover {
+  background-color: rgba(25, 118, 210, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.route-info {
+  margin-bottom: 5px;
+}
+
+.time-info {
+  font-size: 11px;
+  color: #757575;
+}
+
+/* 월간 보기 스타일 개선 */
+.calendar-day {
+  min-height: 120px;
+  padding: 8px;
+  border-right: 1px solid #e0e0e0;
+  position: relative;
+}
+
+.calendar-day-other-month {
+  background-color: #f5f5f5;
+  opacity: 0.7;
+}
+
+.calendar-day-number {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 14px;
+  color: #757575;
+}
+
+.calendar-day-schedules {
+  margin-top: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+  max-height: 85px;
+}
+
+.calendar-schedule-item {
+  background-color: rgba(25, 118, 210, 0.1);
+  border-left: 3px solid #1976d2;
+  border-radius: 4px;
+  padding: 5px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.calendar-schedule-item:hover {
+  background-color: rgba(25, 118, 210, 0.2);
+}
+
+.mini-schedule-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-bus {
+  font-weight: bold;
+}
+
+.mini-route, .mini-driver, .mini-time {
+  color: #555;
+  font-size: 9px;
+}
+/* 날짜 필드 스타일 */
+input[type="date"], 
+input[type="month"],
+input[type="time"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-family: inherit;
+}
+/* 스케줄 항목 내 날짜 표시 스타일 */
+.date-info {
+  color: #1976d2;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+/* 폼 레이아웃 개선 스타일 */
+.form-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-group {
+  flex: 1;
+  margin-bottom: 15px;
+}
+
+/* 셀렉트 박스 스타일 통일 */
+select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-family: inherit;
+  background-color: white;
+}
+
+.edit-button, .save-button {
+  background-color: #1976d2;
+  color: white;
+}
+
+.edit-button:hover, .save-button:hover {
+  background-color: #0d47a1;
+}
+
+.delete-button {
+  background-color: #f44336;
+  color: white;
+}
+
+.delete-button:hover {
+  background-color: #d32f2f;
+}
+
+.cancel-button {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.cancel-button:hover {
+  background-color: #bdbdbd;
+}

@@ -1,0 +1,307 @@
+/* styles/StationManagement.css */
+.station-management .list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.station-management .search-bar {
+  width: 70%; /* 검색창 너비 조정 */
+  margin-right: 10px; /* 오른쪽 여백 추가 */
+}
+
+.station-management .search-bar input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.station-management .add-button {
+  padding: 8px 16px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.station-management .add-button.small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.station-management .add-button:hover {
+  background-color: #0d47a1;
+}
+
+/* 정류장 항목 스타일 개선 */
+.station-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.station-item:hover {
+  background-color: rgba(25, 118, 210, 0.05);
+}
+
+.station-item.selected {
+  background-color: rgba(25, 118, 210, 0.1);
+  border-left: 3px solid #1976d2;
+}
+
+.station-info {
+  flex: 1;
+}
+
+.station-info h3 {
+  margin: 0 0 5px 0;
+  color: #333;
+}
+
+.station-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.station-item .delete-button {
+  padding: 6px 12px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-left: 10px;
+  font-size: 13px;
+}
+
+.station-item .delete-button:hover {
+  background-color: #d32f2f;
+}
+
+/* 정류장 상세 정보 스타일 */
+.management-container {
+  display: flex;
+  min-height: 600px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.list-section {
+  width: 40%;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  background-color: #f9f9f9;
+}
+
+.detail-section {
+  width: 60%;
+  padding: 20px;
+  background-color: #fff;
+  overflow-y: auto;
+}
+
+.station-details {
+  padding: 10px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.detail-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.detail-header .edit-button {
+  padding: 8px 16px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.detail-header .edit-button:hover {
+  background-color: #0d8aee;
+}
+
+.detail-info {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.detail-row {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+}
+
+.detail-row:last-child {
+  margin-bottom: 0;
+}
+
+.detail-row label {
+  min-width: 100px;
+  color: #666;
+  font-weight: 500;
+}
+
+.detail-section h3 {
+  margin: 25px 0 15px 0;
+  color: #333;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+/* 지도 스타일 */
+.map-section {
+  margin-top: 20px;
+}
+
+.map-container {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.map-placeholder {
+  background-color: #f7f7f7;
+  border: 1px dashed #ccc;
+  padding: 20px;
+  text-align: center;
+  color: #777;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.map-help-text {
+  font-size: 13px;
+  color: #666;
+  margin-top: 5px;
+  font-style: italic;
+}
+
+/* 폼 스타일 */
+.station-form {
+  padding: 10px;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+.address-display,
+.coordinates-display {
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  color: #666;
+  font-size: 14px;
+}
+
+.coordinates-display {
+  display: flex;
+  justify-content: space-between;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+.save-button {
+  padding: 10px 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-weight: 500;
+}
+
+.save-button:hover {
+  background-color: #388e3c;
+}
+
+.cancel-button {
+  padding: 10px 20px;
+  background-color: #9e9e9e;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  font-weight: 500;
+}
+
+.cancel-button:hover {
+  background-color: #757575;
+}
+
+.no-selection {
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  color: #9e9e9e;
+  font-size: 16px;
+  text-align: center;
+  padding: 30px;
+}
