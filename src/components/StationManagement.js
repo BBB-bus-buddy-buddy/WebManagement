@@ -291,7 +291,7 @@ function StationManagement() {
     console.log('보내는 데이터:', newStation); // 추가: 서버에 보내는 데이터 로깅
     
     try {
-      const response = await axios.post(`${API_BASE_URL}/user/my-station`, newStation);
+      const response = await axios.post(`${API_BASE_URL}/station`, newStation);
       setStations([...stations, response.data]);
       console.log('저장 데이터 : ', response.data);
       setShowAddForm(false);

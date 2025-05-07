@@ -1,6 +1,6 @@
 // components/Login.js (수정됨)
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import '../styles/Login.css';
 
 function Login({ onLogin }) {
@@ -56,9 +56,6 @@ function Login({ onLogin }) {
           </div>
           {error && <div className="error-message">{error}</div>}
           <button type="submit" className="login-button">로그인</button>
-          <div className="register-link">
-            계정이 없으신가요? <Link to="/register">회원가입</Link>
-          </div>
         </form>
       </div>
     </div>

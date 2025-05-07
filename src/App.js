@@ -14,7 +14,6 @@ import BusOperationInfo from './components/BusOperationInfo';
 import StationManagement from './components/StationManagement';
 import UserProfile from './components/UserProfile';
 import PassengerStats from './components/PassengerStats';
-import Register from './components/Register';
 
 // 스타일 임포트
 import './styles/AppLayout.css';
@@ -68,7 +67,6 @@ function App() {
         ) : (
           <Routes>
             <Route path="/login" element={<Login onLogin={handleLogin} />} />
-            <Route path="/register" element={<Register />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         )}
