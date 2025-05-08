@@ -1,19 +1,17 @@
 // components/RouteManagement.js
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-// API 기본 URL
-const API_BASE_URL = 'http://DevSe.gonetis.com:12589/api';
+import ApiService from '../services/api';
+import '../styles/RouteManagement.css';
 
 function RouteManagement() {
   const navigate = useNavigate();
   const mapRef = useRef(null);
-  const googleMapRef = useRef(null);
+  const kakaoMapRef = useRef(null);
   const markersRef = useRef([]);
   
   // 상태 관리
-  const [registeredStations, setRegisteredStations] = useState([]);
+  const [stations, setStations] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,6 +28,8 @@ function RouteManagement() {
   // 지도 관련 상태
   const [showMap, setShowMap] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
@@ -41,12 +41,44 @@ function RouteManagement() {
   const fetchRoutes = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/routes`);
-      setRoutes(response.data);
+      const response = await ApiService.apiRequest('routes');
+      console.log('노선 데이터 응답:', response);
+      
+      if (response && Array.isArray(response.data)) {
+        setRoutes(response.data);
+      } else if (response && response.data) {
+        setRoutes(Array.isArray(response.data) ? response.data : [response.data]);
+      } else {
+        setRoutes([]);
+      }
       setError(null);
     } catch (err) {
       console.error('노선 데이터 로드 중 오류:', err);
       setError('노선 데이터를 불러오는 중 오류가 발생했습니다.');
+      setRoutes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 노선 검색 기능
+  const searchRoutesByName = async (name) => {
+    try {
+      setIsLoading(true);
+      const response = await ApiService.apiRequest(`routes?name=${encodeURIComponent(name)}`);
+      
+      if (response && Array.isArray(response.data)) {
+        setRoutes(response.data);
+      } else if (response && response.data) {
+        setRoutes(Array.isArray(response.data) ? response.data : [response.data]);
+      } else {
+        setRoutes([]);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('노선 검색 중 오류:', err);
+      setError('노선 검색 중 오류가 발생했습니다.');
+      setRoutes([]);
     } finally {
       setIsLoading(false);
     }
@@ -55,11 +87,20 @@ function RouteManagement() {
   // 정류장 데이터 가져오기
   const fetchStations = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/stations`);
-      setRegisteredStations(response.data);
+      const response = await ApiService.apiRequest('station');
+      console.log('정류장 데이터 응답:', response);
+      
+      if (response && Array.isArray(response.data)) {
+        setStations(response.data);
+      } else if (response && response.data) {
+        setStations(Array.isArray(response.data) ? response.data : [response.data]);
+      } else {
+        setStations([]);
+      }
     } catch (err) {
       console.error('정류장 데이터 로드 중 오류:', err);
       setError('정류장 데이터를 불러오는 중 오류가 발생했습니다.');
+      setStations([]);
     }
   };
 
@@ -67,9 +108,22 @@ function RouteManagement() {
   const fetchRouteDetail = async (routeId) => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/routes/${routeId}`);
-      setSelectedRoute(response.data);
-      setError(null);
+      const response = await ApiService.apiRequest(`routes/${routeId}`);
+      console.log('노선 상세 정보 응답:', response);
+      
+      if (response) {
+        // 응답이 바로 데이터인 경우와 data 속성에 들어있는 경우 모두 처리
+        const routeData = response.data ? response.data : response;
+        
+        // stations 배열이 없거나 비어있는 경우 빈 배열로 설정
+        if (!routeData.stations) {
+          routeData.stations = [];
+        }
+        
+        setSelectedRoute(routeData);
+      } else {
+        setError('노선 상세 정보를 불러오는 중 오류가 발생했습니다.');
+      }
     } catch (err) {
       console.error('노선 상세 정보 로드 중 오류:', err);
       setError('노선 상세 정보를 불러오는 중 오류가 발생했습니다.');
@@ -80,159 +134,259 @@ function RouteManagement() {
 
   // 카카오맵 API 스크립트 로드
   useEffect(() => {
-    // 전역 로드 콜백 함수 정의
-    window.kakaoMapCallback = () => {
-      console.log('카카오맵 API 로드 콜백 실행');
-      setMapLoaded(true);
-    };
-    
-    const mapScript = document.getElementById('kakao-map-script');
-    
-    if (!mapScript) {
+    const loadKakaoMap = () => {
+      if (window.kakao && window.kakao.maps) {
+        console.log('카카오맵 API가 이미 로드되어 있습니다.');
+        setMapLoaded(true);
+        return;
+      }
+      
       const script = document.createElement('script');
       script.id = 'kakao-map-script';
-      // 콜백 방식으로 변경
-      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=3b43e1905f0a0c9567279f725b9730ed&autoload=false&callback=kakaoMapCallback`;
+      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=3b43e1905f0a0c9567279f725b9730ed&autoload=false`;
       script.async = true;
+      script.onload = () => {
+        window.kakao.maps.load(() => {
+          console.log('카카오맵 API 로드 완료');
+          setMapLoaded(true);
+        });
+      };
       
       document.head.appendChild(script);
-    } else if (window.kakao && window.kakao.maps) {
-      console.log('카카오맵 API가 이미 로드되어 있습니다.');
-      setMapLoaded(true);
-    }
+    };
     
-    // 컴포넌트 언마운트 시 정리
+    loadKakaoMap();
+    
     return () => {
-      delete window.kakaoMapCallback;
+      // 필요한 경우 정리 로직 추가
     };
   }, []);
 
-  // showMap 변경 시 지도 초기화 실행
-  useEffect(() => {
-    if (mapLoaded && showMap && mapRef.current) {
-      console.log('지도 초기화 시작', window.kakao);
+  // 지도 모달 열기 함수 수정
+const handleOpenMap = () => {
+  setShowMap(true);
+  
+  // 모달이 열린 후 약간의 지연을 두고 지도 초기화 트리거
+  setTimeout(() => {
+    // 지도가 이미 초기화되었는지 확인
+    if (mapInitialized && kakaoMapRef.current) {
+      console.log('지도가 이미 초기화됨 - 재로드');
       
-      // API가 완전히 로드되었는지 안전하게 체크
-      if (typeof window.kakao === 'undefined' || typeof window.kakao.maps === 'undefined') {
-        console.error('카카오맵 API가 로드되지 않았습니다.');
-        return;
-      }
-      
-      // 지연 시간을 더 길게 설정 (500ms)
-      setTimeout(() => {
-        try {
-          // 먼저 load 함수 실행 확인
-          if (typeof window.kakao.maps.load === 'function') {
-            window.kakao.maps.load(() => {
-              console.log('명시적 load 실행 후 지도 초기화');
-              initializeMap();
-            });
-          } else {
-            // 이미 로드된 경우 바로 초기화
-            initializeMap();
-          }
-        } catch (error) {
-          console.error('지도 초기화 시도 중 오류:', error);
+      // 지도 객체를 완전히 새로 생성
+      if (mapRef.current) {
+        // 기존 지도 및 마커 제거
+        if (markersRef.current.length > 0) {
+          markersRef.current.forEach(marker => marker.setMap(null));
+          markersRef.current = [];
         }
-      }, 500);
+        
+        // 새로운 지도 객체 생성
+        const mapOptions = {
+          center: new window.kakao.maps.LatLng(35.5525, 129.2878),
+          level: 7
+        };
+        
+        const map = new window.kakao.maps.Map(mapRef.current, mapOptions);
+        kakaoMapRef.current = map;
+        
+        // 마커 다시 생성
+        setTimeout(() => {
+          addStationMarkers(map);
+          
+          // 지도 레이아웃 재조정
+          map.relayout();
+        }, 300);
+      }
+    } else if (mapLoaded) {
+      console.log('지도 새로 초기화');
+      initializeMap();
     }
-  }, [mapLoaded, showMap]);
+  }, 500); // 지연 시간 증가
+};
 
-  // 지도 초기화 함수
-  const initializeMap = () => {
-    if (!mapRef.current) {
-      console.error('지도 컨테이너가 없습니다');
+const handleCloseMap = () => {
+  setShowMap(false);
+  // 지도를 닫을 때 지도 객체 자체는 유지 (재사용 목적)
+};
+
+// 지도 초기화 함수 수정
+const initializeMap = () => {
+  console.log('지도 초기화 함수 실행', {
+    mapRef: !!mapRef.current,
+    kakao: !!window.kakao,
+    kakaoMaps: !!(window.kakao && window.kakao.maps)
+  });
+
+  if (!mapRef.current || !window.kakao || !window.kakao.maps) {
+    console.error('지도 초기화를 위한 요소가 준비되지 않았습니다.');
+    return;
+  }
+  
+  try {
+    // 지도 컨테이너 확인
+    const mapContainer = document.getElementById('kakao-map-container');
+    if (!mapContainer) {
+      console.error('지도 컨테이너를 찾을 수 없습니다.');
       return;
     }
     
-    if (typeof window.kakao === 'undefined' || typeof window.kakao.maps === 'undefined') {
-      console.error('카카오맵 API가 로드되지 않았습니다.');
-      return;
+    // 울산광역시 중심 좌표
+    const mapOptions = {
+      center: new window.kakao.maps.LatLng(35.5525, 129.2878),
+      level: 7
+    };
+    
+    // 기존 지도 객체가 있는 경우 마커 제거
+    if (kakaoMapRef.current) {
+      console.log('기존 지도 객체 정리');
+      if (markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => marker.setMap(null));
+        markersRef.current = [];
+      }
     }
     
-    try {
-      console.log('카카오맵 객체 확인:', window.kakao.maps);
-      
-      // LatLng 생성자 확인
-      if (typeof window.kakao.maps.LatLng !== 'function') {
-        console.error('LatLng 생성자가 함수가 아닙니다:', typeof window.kakao.maps.LatLng);
-        return;
-      }
-      
-      // 울산광역시 중심 좌표로 변경 (울산역 기준)
-      const mapOptions = {
-        center: new window.kakao.maps.LatLng(35.5525, 129.2878),
-        level: 7
-      };
-      
-      // 지도 객체 생성
-      const map = new window.kakao.maps.Map(mapRef.current, mapOptions);
-      googleMapRef.current = map;
-      
-      // 정류장 마커 생성
-      addStationMarkers(map);
-    } catch (error) {
-      console.error('지도 초기화 중 구체적인 오류:', error);
-    }
-  };
-
-  // 정류장 마커 추가
-  const addStationMarkers = (map) => {
-    // 기존 마커 제거
-    if (markersRef.current.length > 0) {
-      markersRef.current.forEach(marker => marker.setMap(null));
-      markersRef.current = [];
-    }
+    console.log('새 지도 객체 생성');
+    // 새 지도 객체 생성
+    const map = new window.kakao.maps.Map(mapRef.current, mapOptions);
+    kakaoMapRef.current = map;
     
-    // 새 마커 생성
-    registeredStations.forEach(station => {
-      try {
-        const position = new window.kakao.maps.LatLng(
-          station.coordinates.lat, 
-          station.coordinates.lng
-        );
-        
-        const marker = new window.kakao.maps.Marker({
-          position,
-          map
-        });
-        
-        // 마커 클릭 이벤트
-        window.kakao.maps.event.addListener(marker, 'click', () => {
-          handleStationSelectFromMap(station._id);
-        });
-        
-        // 마커 정보 표시
-        const infowindow = new window.kakao.maps.InfoWindow({
-          content: `<div style="padding:5px;width:150px;text-align:center;">${station.name}</div>`
-        });
-        
-        window.kakao.maps.event.addListener(marker, 'mouseover', () => {
-          infowindow.open(map, marker);
-        });
-        
-        window.kakao.maps.event.addListener(marker, 'mouseout', () => {
-          infowindow.close();
-        });
-        
-        markersRef.current.push(marker);
-      } catch (error) {
-        console.error(`정류장 ${station.name} 마커 생성 중 오류:`, error);
-      }
+    // 지도 로드 완료 이벤트
+    window.kakao.maps.event.addListener(map, 'tilesloaded', function() {
+      console.log('지도 타일 로드 완료');
     });
     
-    // 선택된 정류장 하이라이트
-    highlightSelectedStations();
-  };
+    // 정류장 마커 추가
+    setTimeout(() => {
+      addStationMarkers(map);
+    }, 300);
+    
+    // 지도 생성 후 크기 재설정
+    setTimeout(() => {
+      if (map && typeof map.relayout === 'function') {
+        console.log('지도 크기 재조정');
+        map.relayout();
+      }
+    }, 500);
+    
+    // 초기화 완료 표시
+    setMapInitialized(true);
+    
+  } catch (error) {
+    console.error('지도 초기화 중 오류:', error);
+  }
+};
+
+// 여러 정류장을 한 번에 선택할 수 있도록 정류장 마커 클릭 이벤트 수정
+// 정류장 마커 추가 함수 수정
+const addStationMarkers = (map) => {
+  console.log('정류장 마커 추가 함수 실행', {
+    mapExists: !!map,
+    stationsCount: stations?.length || 0
+  });
+
+  // 기존 마커 제거
+  if (markersRef.current.length > 0) {
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = [];
+  }
+  
+  // 정류장 데이터가 없으면 종료
+  if (!stations || stations.length === 0) {
+    console.log('표시할 정류장 데이터가 없습니다.');
+    return;
+  }
+  
+  // 새 마커 생성
+  stations.forEach((station, index) => {
+    try {
+      // 정류장 좌표 검증 및 처리
+      if (!station.location || !Array.isArray(station.location.coordinates) || station.location.coordinates.length < 2) {
+        console.warn(`정류장 #${index} 좌표 정보 없음:`, station);
+        return;
+      }
+      
+      // 유효한 좌표인지 검증
+      const lat = parseFloat(station.location.coordinates[0]);
+      const lng = parseFloat(station.location.coordinates[1]);
+      
+      if (isNaN(lat) || isNaN(lng)) {
+        console.warn(`정류장 ${station.name || index}의 좌표가 유효하지 않음:`, station.location.coordinates);
+        return;
+      }
+      
+      // 좌표 범위 확인 (유효한 위도/경도 범위인지)
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        console.warn(`정류장 ${station.name || index}의 좌표가 범위를 벗어남:`, lat, lng);
+        return;
+      }
+      
+      const position = new window.kakao.maps.LatLng(lat, lng);
+      
+      // 마커 이미지 설정
+      let markerImage = null;
+      const isSelected = (showAddForm && newRoute && newRoute.stations && 
+                          newRoute.stations.some(s => s.stationId === station.id)) || 
+                          (showEditForm && editRoute && editRoute.stations && 
+                          editRoute.stations.some(s => s.stationId === station.id));
+      
+      if (isSelected) {
+        // 이미 선택된 정류장은 별 모양으로 표시
+        markerImage = new window.kakao.maps.MarkerImage(
+          '//t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+          new window.kakao.maps.Size(24, 35)
+        );
+      }
+      
+      const marker = new window.kakao.maps.Marker({
+        position,
+        map,
+        image: markerImage
+      });
+      
+      // 마커 클릭 이벤트
+      window.kakao.maps.event.addListener(marker, 'click', () => {
+        handleStationSelectFromMap(station.id);
+        
+        // 마커 이미지 업데이트 (별 모양으로 변경)
+        const selectedMarkerImage = new window.kakao.maps.MarkerImage(
+          '//t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+          new window.kakao.maps.Size(24, 35)
+        );
+        marker.setImage(selectedMarkerImage);
+      });
+      
+      // 마커 정보 표시
+      const infowindow = new window.kakao.maps.InfoWindow({
+        content: `<div style="padding:5px;width:150px;text-align:center;">${station.name || '정류장'}</div>`
+      });
+      
+      window.kakao.maps.event.addListener(marker, 'mouseover', () => {
+        infowindow.open(map, marker);
+      });
+      
+      window.kakao.maps.event.addListener(marker, 'mouseout', () => {
+        infowindow.close();
+      });
+      
+      markersRef.current.push(marker);
+    } catch (error) {
+      console.error(`정류장 마커 생성 중 오류:`, error, station);
+    }
+  });
+  
+  console.log('생성된 마커 수:', markersRef.current.length);
+  highlightSelectedStations();
+};
 
   // 선택된 정류장 하이라이트
   const highlightSelectedStations = () => {
-    if (!googleMapRef.current || !markersRef.current || !markersRef.current.length || !window.kakao || !window.kakao.maps) {
+    if (!kakaoMapRef.current || !markersRef.current || !markersRef.current.length || !window.kakao || !window.kakao.maps) {
       console.log('마커 하이라이트를 위한 조건이 충족되지 않음');
       return;
     }
     
-    const selectedIds = showAddForm 
+    // 안전하게 stations 배열 얻기 - some 메서드 오류 방지
+    const selectedIds = showAddForm && newRoute && newRoute.stations
       ? newRoute.stations.map(s => s.stationId)
       : showEditForm && editRoute && editRoute.stations
         ? editRoute.stations.map(s => s.stationId)
@@ -240,7 +394,12 @@ function RouteManagement() {
     
     try {
       markersRef.current.forEach((marker, index) => {
-        const stationId = registeredStations[index]._id;
+        if (index >= stations.length) {
+          console.warn(`마커 인덱스(${index})가 stations 배열 범위를 벗어남`);
+          return;
+        }
+        
+        const stationId = stations[index].id;
         
         if (selectedIds.includes(stationId)) {
           // 선택된 정류장 마커 이미지 변경
@@ -259,35 +418,41 @@ function RouteManagement() {
     }
   };
 
-  // 지도에서 정류장 선택 시 처리
+  // 지도에서 정류장 선택 시 처리 - 여러 정류장 선택 가능하도록 수정
   const handleStationSelectFromMap = (stationId) => {
-    if (showAddForm) {
+    if (showAddForm && newRoute) {
       // 이미 추가된 정류장인지 확인
-      if (newRoute.stations.some(s => s.stationId === stationId)) {
+      if (newRoute.stations && newRoute.stations.some(s => s.stationId === stationId)) {
         alert('이미 추가된 정류장입니다.');
         return;
       }
       
+      // stations 배열이 없는 경우 초기화
+      const currentStations = newRoute.stations || [];
+      
       // 순서 계산 (현재 선택된 정류장 수 + 1)
-      const sequence = newRoute.stations.length + 1;
+      const sequence = currentStations.length + 1;
       
       setNewRoute({
         ...newRoute,
-        stations: [...newRoute.stations, { sequence, stationId }]
+        stations: [...currentStations, { sequence, stationId }]
       });
     } else if (showEditForm && editRoute) {
       // 이미 추가된 정류장인지 확인
-      if (editRoute.stations.some(s => s.stationId === stationId)) {
+      if (editRoute.stations && editRoute.stations.some(s => s.stationId === stationId)) {
         alert('이미 추가된 정류장입니다.');
         return;
       }
       
+      // stations 배열이 없는 경우 초기화
+      const currentStations = editRoute.stations || [];
+      
       // 순서 계산 (현재 선택된 정류장 수 + 1)
-      const sequence = editRoute.stations.length + 1;
+      const sequence = currentStations.length + 1;
       
       setEditRoute({
         ...editRoute,
-        stations: [...editRoute.stations, { sequence, stationId }]
+        stations: [...currentStations, { sequence, stationId }]
       });
     }
     
@@ -299,18 +464,25 @@ function RouteManagement() {
 
   // 정류장 ID로 정류장 이름 가져오기
   const getStationName = (stationId) => {
-    const station = registeredStations.find(s => s._id === stationId);
+    if (!stationId) return '정류장 정보 없음';
+    const station = stations.find(s => s.id === stationId);
     return station ? station.name : '알 수 없는 정류장';
   };
 
   // 정류장 객체 가져오기
   const getStationById = (stationId) => {
-    return registeredStations.find(s => s._id === stationId);
+    if (!stationId) return null;
+    return stations.find(s => s.id === stationId);
   };
 
   // 노선 클릭 시 처리
   const handleRouteClick = (route) => {
-    fetchRouteDetail(route._id);
+    if (!route || !route.id) {
+      console.error('선택한 노선의 ID가 없습니다:', route);
+      return;
+    }
+    
+    fetchRouteDetail(route.id);
     setShowAddForm(false);
     setShowEditForm(false);
     setShowMap(false);
@@ -318,6 +490,10 @@ function RouteManagement() {
 
   // 정류장 클릭 시 해당 정류장 상세페이지로 이동
   const handleStationClick = (stationId) => {
+    if (!stationId) {
+      console.error('선택한 정류장의 ID가 없습니다');
+      return;
+    }
     navigate(`/stations/${stationId}`);
   };
 
@@ -335,14 +511,19 @@ function RouteManagement() {
 
   // 노선 삭제
   const handleDeleteRoute = async (id) => {
+    if (!id) {
+      console.error('삭제할 노선의 ID가 없습니다');
+      return;
+    }
+    
     if (window.confirm('정말로 이 노선을 삭제하시겠습니까?')) {
       try {
-        await axios.delete(`${API_BASE_URL}/routes/${id}`);
+        await ApiService.apiRequest(`routes/${id}`, 'DELETE');
         
         // 성공적으로 삭제된 후 노선 목록 새로고침
         fetchRoutes();
         
-        if (selectedRoute && selectedRoute._id === id) {
+        if (selectedRoute && selectedRoute.id === id) {
           setSelectedRoute(null);
         }
         
@@ -363,19 +544,9 @@ function RouteManagement() {
     });
   };
 
-  // 정류장 추가 버튼 클릭 - 지도 표시
-  const handleOpenMap = () => {
-    setShowMap(true);
-  };
-
-  // 지도 닫기
-  const handleCloseMap = () => {
-    setShowMap(false);
-  };
-
   // 정류장 제거
   const handleRemoveStation = (index) => {
-    if (showAddForm) {
+    if (showAddForm && newRoute && newRoute.stations) {
       const updatedStations = [...newRoute.stations];
       updatedStations.splice(index, 1);
       
@@ -389,7 +560,7 @@ function RouteManagement() {
         ...newRoute,
         stations: reorderedStations
       });
-    } else if (showEditForm && editRoute) {
+    } else if (showEditForm && editRoute && editRoute.stations) {
       const updatedStations = [...editRoute.stations];
       updatedStations.splice(index, 1);
       
@@ -415,7 +586,7 @@ function RouteManagement() {
   const handleAddRoute = async (e) => {
     e.preventDefault();
     
-    if (newRoute.stations.length < 2) {
+    if (!newRoute.stations || newRoute.stations.length < 2) {
       alert('노선에는 최소 2개 이상의 정류장이 필요합니다.');
       return;
     }
@@ -423,10 +594,15 @@ function RouteManagement() {
     try {
       const routeData = {
         routeName: newRoute.routeName,
-        stations: newRoute.stations
+        stations: newRoute.stations.map(station => ({
+          sequence: station.sequence,
+          stationId: station.stationId
+        }))
       };
       
-      const response = await axios.post(`${API_BASE_URL}/routes`, routeData);
+      console.log('노선 등록 요청 데이터:', routeData);
+      const response = await ApiService.apiRequest('routes', 'POST', routeData);
+      console.log('노선 등록 응답:', response);
       
       // 성공적으로 추가된 후 노선 목록 새로고침
       fetchRoutes();
@@ -441,7 +617,9 @@ function RouteManagement() {
       alert('노선이 등록되었습니다.');
       
       // 새로 추가된 노선 선택
-      fetchRouteDetail(response.data._id);
+      if (response && response.id) {
+        fetchRouteDetail(response.id);
+      }
     } catch (error) {
       console.error('노선 등록 중 오류:', error);
       alert('노선 등록 중 오류가 발생했습니다.');
@@ -450,9 +628,20 @@ function RouteManagement() {
 
   // 노선 수정 버튼 클릭
   const handleEditRouteClick = () => {
+    if (!selectedRoute) {
+      alert('선택된 노선이 없습니다.');
+      return;
+    }
+    
+    // stations 배열이 없는 경우 초기화
+    const route = {
+      ...selectedRoute,
+      stations: selectedRoute.stations || []
+    };
+    
     setShowEditForm(true);
     setShowMap(false);
-    setEditRoute({...selectedRoute});
+    setEditRoute(route);
   };
 
   // 노선 수정 폼 입력 처리
@@ -468,25 +657,29 @@ function RouteManagement() {
   const handleUpdateRoute = async (e) => {
     e.preventDefault();
     
-    if (editRoute.stations.length < 2) {
+    if (!editRoute.stations || editRoute.stations.length < 2) {
       alert('노선에는 최소 2개 이상의 정류장이 필요합니다.');
       return;
     }
     
     try {
       const routeData = {
-        _id: editRoute._id,
+        id: editRoute.id,
         routeName: editRoute.routeName,
-        stations: editRoute.stations
+        stations: editRoute.stations.map(station => ({
+          sequence: station.sequence,
+          stationId: station.stationId
+        }))
       };
       
-      await axios.put(`${API_BASE_URL}/routes`, routeData);
+      console.log('노선 수정 요청 데이터:', routeData);
+      await ApiService.apiRequest('routes', 'PUT', routeData);
       
       // 성공적으로 수정된 후 노선 목록 새로고침
       fetchRoutes();
       
       // 수정된 노선 정보로 선택된 노선 업데이트
-      fetchRouteDetail(editRoute._id);
+      fetchRouteDetail(editRoute.id);
       
       setShowEditForm(false);
       setShowMap(false);
@@ -500,6 +693,10 @@ function RouteManagement() {
 
   // 이미 추가된 정류장 배열을 기준으로 정류장 정렬
   const getOrderedStations = (stationList) => {
+    if (!stationList || !Array.isArray(stationList) || stationList.length === 0) {
+      return [];
+    }
+    
     return stationList
       .sort((a, b) => a.sequence - b.sequence)
       .map(station => {
@@ -512,6 +709,45 @@ function RouteManagement() {
         };
       });
   };
+
+  // 노선 검색 (debounce 적용)
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    // 300ms debounce 적용
+    if (window.searchTimeout) {
+      clearTimeout(window.searchTimeout);
+    }
+    
+    window.searchTimeout = setTimeout(() => {
+      if (value) {
+        searchRoutesByName(value);
+      } else {
+        fetchRoutes();
+      }
+    }, 300);
+  };
+
+  // 컴포넌트 언마운트 시 정리
+  useEffect(() => {
+    return () => {
+      // 마커 정리
+      if (markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => marker.setMap(null));
+        markersRef.current = [];
+      }
+      
+      // 지도 참조 정리
+      kakaoMapRef.current = null;
+      setMapInitialized(false);
+      
+      // 검색 타이머 정리
+      if (window.searchTimeout) {
+        clearTimeout(window.searchTimeout);
+      }
+    };
+  }, []);
 
   // 로딩 상태 표시
   if (isLoading && !selectedRoute && !showAddForm && !showEditForm) {
@@ -535,6 +771,48 @@ function RouteManagement() {
     );
   }
 
+  // 노선 정보에서 stationId 추출 (레퍼런스 객체 처리)
+  const extractStationId = (stationRef) => {
+    if (!stationRef) return null;
+    
+    // stationId가 직접 문자열인 경우
+    if (typeof stationRef === 'string') {
+      return stationRef;
+    }
+    
+    // stationId가 객체인 경우 (예: {$ref: "stations", $id: {$oid: "..."}}
+    if (stationRef.$id && stationRef.$id.$oid) {
+      return stationRef.$id.$oid;
+    }
+    
+    // 직접 stationId 필드가 있는 경우
+    if (stationRef.stationId) {
+      // 재귀적으로 처리 (stationId가 다시 객체일 수 있음)
+      return extractStationId(stationRef.stationId);
+    }
+    
+    // ID가 없는 경우
+    return null;
+  };
+
+  // 노선 정보 처리
+  const processRouteStations = (route) => {
+    if (!route || !route.stations || !Array.isArray(route.stations)) {
+      return [];
+    }
+    
+    return route.stations.map((station, index) => {
+      // stationId 추출
+      const stationId = extractStationId(station);
+      
+      return {
+        sequence: station.sequence || index + 1,
+        stationId: stationId,
+        name: getStationName(stationId)
+      };
+    }).sort((a, b) => a.sequence - b.sequence);
+  };
+
   return (
     <div className="route-management">
       <h1>노선 관리</h1>
@@ -542,40 +820,57 @@ function RouteManagement() {
         <div className="list-section">
           <div className="list-header">
             <h2>노선 목록</h2>
+            <div className="search-container">
+              <input
+                type="text"
+                placeholder="노선명 검색..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="search-input"
+              />
+            </div>
             <button onClick={handleAddRouteClick} className="add-button">+ 노선 추가</button>
           </div>
           <div className="route-list">
-            {routes.map(route => (
-              <div 
-                key={route._id} 
-                className={`route-item ${selectedRoute && selectedRoute._id === route._id ? 'selected' : ''}`}
-                onClick={() => handleRouteClick(route)}
-              >
-                <div className="route-info">
-                  <h3>{route.routeName}</h3>
-                  <p>
-                    {route.stations && route.stations.length > 0 ? (
-                      <>
-                        {getStationName(route.stations[0].stationId)} → 
-                        {getStationName(route.stations[route.stations.length - 1].stationId)} 
-                        ({route.stations.length}개 정류장)
-                      </>
-                    ) : (
-                      '정류장 정보 없음'
-                    )}
-                  </p>
-                </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteRoute(route._id);
-                  }} 
-                  className="delete-button"
+            {routes.length === 0 ? (
+              <div className="empty-list">등록된 노선이 없습니다.</div>
+            ) : (
+              routes.map(route => (
+                <div 
+                  key={route.id || route._id} 
+                  className={`route-item ${selectedRoute && (selectedRoute.id === route.id || selectedRoute._id === route._id) ? 'selected' : ''}`}
+                  onClick={() => handleRouteClick(route)}
                 >
-                  삭제
-                </button>
-              </div>
-            ))}
+                  <div className="route-info">
+                    <h3>{route.routeName}</h3>
+                    <p>
+                      {route.stations && route.stations.length > 0 ? (
+                        (() => {
+                          const processedStations = processRouteStations(route);
+                          if (processedStations.length === 0) return '정류장 정보 없음';
+                          
+                          const first = processedStations[0];
+                          const last = processedStations[processedStations.length - 1];
+                          
+                          return `${first.name} → ${last.name} (${processedStations.length}개 정류장)`;
+                        })()
+                      ) : (
+                        '정류장 정보 없음'
+                      )}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteRoute(route.id || route._id);
+                    }} 
+                    className="delete-button"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
         
@@ -591,21 +886,34 @@ function RouteManagement() {
                   <label>노선명:</label>
                   <span>{selectedRoute.routeName}</span>
                 </div>
+                <div className="detail-row">
+                  <label>소속:</label>
+                  <span>{selectedRoute.organizationId || 'Uasidnw'}</span>
+                </div>
                 <div className="detail-section">
                   <h3>경유 정류장</h3>
                   <div className="stations-list">
                     {selectedRoute.stations && selectedRoute.stations.length > 0 ? (
-                      getOrderedStations(selectedRoute.stations).map((station, index) => (
-                        <div key={index} className="station-item">
-                          <span 
-                            className="station-link" 
-                            onClick={() => handleStationClick(station.id)}
-                          >
-                            {station.name}
-                          </span>
-                          {index < selectedRoute.stations.length - 1 && <span className="arrow">→</span>}
-                        </div>
-                      ))
+                      (() => {
+                        const processedStations = processRouteStations(selectedRoute);
+                        
+                        return processedStations.length > 0 ? (
+                          processedStations.map((station, index) => (
+                            <div key={`${station.stationId}-${index}`} className="station-item">
+                              <span className="station-number">{index + 1}.</span>
+                              <span 
+                                className="station-link" 
+                                onClick={() => handleStationClick(station.stationId)}
+                              >
+                                {station.name}
+                              </span>
+                              {index < processedStations.length - 1 && <span className="arrow">→</span>}
+                            </div>
+                          ))
+                        ) : (
+                          <p>정류장 정보를 처리할 수 없습니다.</p>
+                        );
+                      })()
                     ) : (
                       <p>등록된 정류장이 없습니다.</p>
                     )}
@@ -613,11 +921,11 @@ function RouteManagement() {
                 </div>
                 <div className="detail-section">
                   <h3>생성일</h3>
-                  <p>{new Date(selectedRoute.createdAt).toLocaleDateString()}</p>
+                  <p>{selectedRoute.createdAt ? new Date(selectedRoute.createdAt).toLocaleDateString() : '정보 없음'}</p>
                 </div>
                 <div className="detail-section">
                   <h3>최종 수정일</h3>
-                  <p>{new Date(selectedRoute.updatedAt).toLocaleDateString()}</p>
+                  <p>{selectedRoute.updatedAt ? new Date(selectedRoute.updatedAt).toLocaleDateString() : '정보 없음'}</p>
                 </div>
               </div>
             </div>
@@ -653,11 +961,11 @@ function RouteManagement() {
                 
                 <div className="stations-container">
                   <label>추가된 정류장 목록</label>
-                  {newRoute.stations.length > 0 ? (
+                  {newRoute.stations && newRoute.stations.length > 0 ? (
                     <div className="stations-list-edit">
-                      {getOrderedStations(newRoute.stations).map((station, index) => (
-                        <div key={index} className="station-item-edit">
-                          <span>{index + 1}. {station.name}</span>
+                      {newRoute.stations.map((station, index) => (
+                        <div key={`${station.stationId}-${index}`} className="station-item-edit">
+                          <span>{index + 1}. {getStationName(station.stationId)}</span>
                           <button 
                             type="button" 
                             onClick={() => handleRemoveStation(index)}
@@ -721,9 +1029,9 @@ function RouteManagement() {
                   <label>정류장 목록</label>
                   {editRoute.stations && editRoute.stations.length > 0 ? (
                     <div className="stations-list-edit">
-                      {getOrderedStations(editRoute.stations).map((station, index) => (
-                        <div key={index} className="station-item-edit">
-                          <span>{index + 1}. {station.name}</span>
+                      {editRoute.stations.map((station, index) => (
+                        <div key={`${station.stationId}-${index}`} className="station-item-edit">
+                          <span>{index + 1}. {getStationName(station.stationId)}</span>
                           <button 
                             type="button" 
                             onClick={() => handleRemoveStation(index)}
@@ -763,90 +1071,218 @@ function RouteManagement() {
       </div>
       
       {/* 지도 모달 */}
-      {showMap && (
-        <div className="map-modal">
-          <div className="map-container">
-            <div className="map-header">
-              <h3>지도에서 정류장 선택</h3>
-              <button 
-                className="close-map-button"
-                onClick={handleCloseMap}
-              >
-                ✕
-              </button>
+{showMap && (
+  <div 
+    id="kakao-map-modal" 
+    className="map-modal" 
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      zIndex: 1000,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      overflow: 'hidden'
+    }}
+  >
+    <div 
+      className="map-container" 
+      style={{
+        width: '90%',
+        maxWidth: '1000px',
+        height: '90vh',
+        backgroundColor: 'white',
+        borderRadius: '8px',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative'
+      }}
+    >
+      <div className="map-header" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '10px'
+      }}>
+        <h3>지도에서 정류장 선택</h3>
+        <button 
+  className="close-map-button"
+  onClick={handleCloseMap}
+  style={{
+    background: 'none',
+    border: 'none',
+    fontSize: '24px',
+    cursor: 'pointer'
+  }}
+>
+  ✕
+</button>
+      </div>
+      <div className="map-instructions" style={{
+        marginBottom: '10px',
+        padding: '10px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '4px'
+      }}>
+        <p><strong>여러 개의 정류장을 연속해서 선택할 수 있습니다.</strong></p>
+        <p>지도에서 정류장 마커를 클릭하면 자동으로 노선에 추가됩니다.</p>
+        <p>이미 추가된 정류장은 <span style={{color: '#2196F3'}}>별 모양</span>으로 표시됩니다.</p>
+      </div>
+      <div 
+  id="kakao-map-container"
+  ref={mapRef} 
+  className="map-view"
+  style={{
+    width: '100%',
+    height: '400px',
+    borderRadius: '8px',
+    marginBottom: '10px',
+    flex: 1,
+    position: 'relative',
+    border: '1px solid #ddd',
+    minHeight: '400px'  // 이 부분이 중요
+  }}
+></div>
+      <div className="map-station-list" style={{
+        maxHeight: '200px',
+        overflowY: 'auto',
+        padding: '10px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '4px'
+      }}>
+        <h4 style={{marginBottom: '10px'}}>현재 선택된 정류장</h4>
+        <div className="map-station-items">
+          {showAddForm && newRoute && newRoute.stations && newRoute.stations.length > 0 ? (
+            <div className="stations-list">
+              {newRoute.stations.map((station, index) => (
+                <div key={`${station.stationId}-${index}`} className="map-station-item" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderBottom: '1px solid #eee',
+                  backgroundColor: 'white',
+                  borderRadius: '4px',
+                  marginBottom: '6px'
+                }}>
+                  <span className="map-station-number" style={{
+                    fontWeight: 'bold',
+                    marginRight: '10px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px'
+                  }}>{station.sequence}</span>
+                  <span className="map-station-name" style={{
+                    flex: 1,
+                    paddingLeft: '8px',
+                    fontWeight: 'normal'
+                  }}>{getStationName(station.stationId)}</span>
+                  <button 
+                    className="map-remove-station"
+                    onClick={() => handleRemoveStation(index)}
+                    style={{
+                      background: 'none',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      color: '#f44336'
+                    }}
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
             </div>
-            <div className="map-instructions">
-              <p>지도에서 정류장 마커를 클릭하면 자동으로 노선에 추가됩니다.</p>
-              <p>이미 추가된 정류장은 초록색으로 표시됩니다.</p>
+          ) : showEditForm && editRoute && editRoute.stations && editRoute.stations.length > 0 ? (
+            <div className="stations-list">
+              {editRoute.stations.map((station, index) => (
+                <div key={`${station.stationId}-${index}`} className="map-station-item" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderBottom: '1px solid #eee',
+                  backgroundColor: 'white',
+                  borderRadius: '4px',
+                  marginBottom: '6px'
+                }}>
+                  <span className="map-station-number" style={{
+                    fontWeight: 'bold',
+                    marginRight: '10px',
+                    backgroundColor: '#2196F3',
+                    color: 'white',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px'
+                  }}>{station.sequence}</span>
+                  <span className="map-station-name" style={{
+                    flex: 1,
+                    paddingLeft: '8px',
+                    fontWeight: 'normal'
+                  }}>{getStationName(station.stationId)}</span>
+                  <button 
+                    className="map-remove-station"
+                    onClick={() => handleRemoveStation(index)}
+                    style={{
+                      background: 'none',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      cursor: 'pointer',
+                      color: '#f44336'
+                    }}
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
             </div>
-            <div 
-              ref={mapRef} 
-              className="map-view"
-              style={{
-                width: '100%',
-                height: '500px',
-                borderRadius: '8px'
-              }}
-            ></div>
-            <div className="map-station-list">
-              <h4>현재 선택된 정류장</h4>
-              <div className="map-station-items">
-                {showAddForm && newRoute.stations.length > 0 ? (
-                  <div className="stations-list">
-                    {getOrderedStations(newRoute.stations).map((station, index) => (
-                      <div key={index} className="map-station-item">
-                        <span className="map-station-number">{station.sequence}</span>
-                        <span className="map-station-name">{station.name}</span>
-                        <button 
-                          className="map-remove-station"
-                          onClick={() => {
-                            const stationIndex = newRoute.stations.findIndex(s => s.stationId === station.id);
-                            if (stationIndex !== -1) {
-                              handleRemoveStation(stationIndex);
-                            }
-                          }}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : showEditForm && editRoute && editRoute.stations && editRoute.stations.length > 0 ? (
-                  <div className="stations-list">
-                    {getOrderedStations(editRoute.stations).map((station, index) => (
-                      <div key={index} className="map-station-item">
-                        <span className="map-station-number">{station.sequence}</span>
-                        <span className="map-station-name">{station.name}</span>
-                        <button 
-                          className="map-remove-station"
-                          onClick={() => {
-                            const stationIndex = editRoute.stations.findIndex(s => s.stationId === station.id);
-                            if (stationIndex !== -1) {
-                              handleRemoveStation(stationIndex);
-                            }
-                          }}
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="no-stations">선택된 정류장이 없습니다. 지도에서 정류장을 선택하세요.</p>
-                )}
-              </div>
-              <div className="map-actions">
-                <button 
-                  className="map-done-button"
-                  onClick={handleCloseMap}
-                >
-                  선택 완료
-                </button>
-              </div>
-            </div>
-          </div>
+          ) : (
+            <p className="no-stations">선택된 정류장이 없습니다. 지도에서 정류장을 선택하세요.</p>
+          )}
         </div>
-      )}
+        <div className="map-actions" style={{
+          marginTop: '15px',
+          textAlign: 'center'
+        }}>
+          <button 
+            className="map-done-button"
+            onClick={handleCloseMap}
+            style={{
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold'
+            }}
+          >
+            선택 완료
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

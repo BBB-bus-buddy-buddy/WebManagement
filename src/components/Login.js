@@ -1,29 +1,41 @@
 // components/Login.js (수정됨)
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ApiService from '../services/api';
 import '../styles/Login.css';
 
 function Login({ onLogin }) {
-  const [username, setUsername] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // 더미 인증
-    if (username === 'admin' && password === 'password') {
+    
+    try {
+      const response = await ApiService.login(organizationId, password);
+      
+      // 서버에서 반환된 응답 로그 출력
+      console.log('로그인 응답:', response);
+      
+      const { data } = response;
+      
+      // 토큰 로그 출력
+      console.log('액세스 토큰:', data.token);
+      
+      // 사용자 정보 설정
       const userData = {
-        id: 1,
-        username: 'admin',
-        name: '관리자',
-        email: 'admin@busadmin.com',
-        role: 'Administrator'
+        name: data.name,
+        organizationId: data.organizationId,
+        token: data.token
       };
+      
       onLogin(userData);
       navigate('/dashboard');
-    } else {
+    } catch (err) {
       setError('아이디 또는 비밀번호가 일치하지 않습니다.');
+      console.error('로그인 오류:', err);
     }
   };
 
@@ -33,12 +45,12 @@ function Login({ onLogin }) {
         <h1>버스 관리 시스템</h1>
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">아이디</label>
+            <label htmlFor="organizationId">아이디</label>
             <input
               type="text"
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              id="organizationId"
+              value={organizationId}
+              onChange={(e) => setOrganizationId(e.target.value)}
               required
               placeholder="아이디를 입력하세요"
             />

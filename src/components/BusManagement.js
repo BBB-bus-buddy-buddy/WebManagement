@@ -1,230 +1,186 @@
 // components/BusManagement.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ApiService from '../services/api';
+import '../styles/Management.css';
 
 function BusManagement() {
-  // 버스 더미 데이터 - 추가 정보 포함
-  const [buses, setBuses] = useState([
-    {
-      id: 1,
-      number: '108',
-      model: '현대 슈퍼에어로시티',
-      capacity: 45,
-      manufactureDate: '2022-05-15', // 출고 날짜
-      year: 2022, // 연식
-      price: 120000000, // 가격 (원)
-      mileage: 45820, // 운행 키로수 (km)
-      fuel: '디젤', // 연료 종류
-      maintenanceStatus: '양호', // 정비 상태
-      lastMaintenanceDate: '2025-02-15', // 최근 정비일
-      insuranceExpiryDate: '2025-12-31', // 보험 만료일
-      operationRecords: [
-        { 
-          id: 1, 
-          route: '강남-송파', 
-          driverName: '김철수', 
-          date: '2025-03-30', 
-          startTime: '08:00', 
-          endTime: '16:00' 
-        },
-        { 
-          id: 2, 
-          route: '강남-송파', 
-          driverName: '김철수', 
-          date: '2025-03-29', 
-          startTime: '08:00', 
-          endTime: '16:00' 
-        },
-        { 
-          id: 3, 
-          route: '강남-송파', 
-          driverName: '김철수', 
-          date: '2025-03-28', 
-          startTime: '08:00', 
-          endTime: '16:00' 
-        }
-      ]
-    },
-    {
-      id: 2,
-      number: '302',
-      model: '대우 BS110CN',
-      capacity: 40,
-      manufactureDate: '2021-08-20',
-      year: 2021,
-      price: 110000000,
-      mileage: 67520,
-      fuel: '디젤',
-      maintenanceStatus: '점검 필요',
-      lastMaintenanceDate: '2024-12-10',
-      insuranceExpiryDate: '2025-09-15',
-      operationRecords: [
-        { 
-          id: 1, 
-          route: '서초-강남', 
-          driverName: '박영희', 
-          date: '2025-03-30', 
-          startTime: '14:00', 
-          endTime: '22:00' 
-        },
-        { 
-          id: 2, 
-          route: '서초-강남', 
-          driverName: '박영희', 
-          date: '2025-03-29', 
-          startTime: '14:00', 
-          endTime: '22:00' 
-        }
-      ]
-    },
-    {
-      id: 3,
-      number: '401',
-      model: '현대 유니시티',
-      capacity: 45,
-      manufactureDate: '2023-02-10',
-      year: 2023,
-      price: 135000000,
-      mileage: 28150,
-      fuel: '전기',
-      maintenanceStatus: '양호',
-      lastMaintenanceDate: '2025-01-20',
-      insuranceExpiryDate: '2026-02-28',
-      operationRecords: [
-        { 
-          id: 1, 
-          route: '송파-강동', 
-          driverName: '이민수', 
-          date: '2025-03-30', 
-          startTime: '06:00', 
-          endTime: '14:00' 
-        }
-      ]
-    },
-    {
-      id: 4,
-      number: '152',
-      model: '현대 슈퍼에어로시티',
-      capacity: 45,
-      manufactureDate: '2022-11-05',
-      year: 2022,
-      price: 122000000,
-      mileage: 38750,
-      fuel: '디젤',
-      maintenanceStatus: '양호',
-      lastMaintenanceDate: '2025-03-01',
-      insuranceExpiryDate: '2025-11-30',
-      operationRecords: [
-        { 
-          id: 1, 
-          route: '강북-도봉', 
-          driverName: '최지영', 
-          date: '2025-03-30', 
-          startTime: '22:00', 
-          endTime: '06:00' 
-        }
-      ]
-    },
-    {
-      id: 5,
-      number: '273',
-      model: '대우 BS110CN',
-      capacity: 40,
-      manufactureDate: '2021-06-18',
-      year: 2021,
-      price: 108000000,
-      mileage: 72380,
-      fuel: '디젤',
-      maintenanceStatus: '정비 중',
-      lastMaintenanceDate: '2025-03-25',
-      insuranceExpiryDate: '2025-07-10',
-      operationRecords: [
-        { 
-          id: 1, 
-          route: '종로-중구', 
-          driverName: '정현우', 
-          date: '2025-03-30', 
-          startTime: '06:00', 
-          endTime: '14:00' 
-        }
-      ]
-    }
-  ]);
-
+  // 상태 관리
+  const [buses, setBuses] = useState([]);
   const [selectedBus, setSelectedBus] = useState(null);
+  const [busDetails, setBusDetails] = useState(null);
+  const [busSeats, setBusSeats] = useState(null);
+  const [busLocation, setBusLocation] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [routes, setRoutes] = useState([]);
   const [editBus, setEditBus] = useState({
-    number: '',
-    model: '',
-    capacity: 40,
-    manufactureDate: '',
-    year: new Date().getFullYear(),
-    price: 0,
-    mileage: 0,
-    fuel: '디젤',
-    maintenanceStatus: '양호',
-    lastMaintenanceDate: '',
-    insuranceExpiryDate: ''
+    busNumber: '',
+    routeId: '',
+    totalSeats: 45
   });
   const [newBus, setNewBus] = useState({
-    number: '',
-    model: '',
-    capacity: 40,
-    manufactureDate: '',
-    year: new Date().getFullYear(),
-    price: 0,
-    mileage: 0,
-    fuel: '디젤',
-    maintenanceStatus: '양호',
-    lastMaintenanceDate: '',
-    insuranceExpiryDate: ''
+    busNumber: '',
+    routeId: '',
+    totalSeats: 45
   });
 
-  // 가격을 화폐 형식으로 포맷팅하는 함수
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('ko-KR', { 
-      style: 'currency', 
-      currency: 'KRW',
-      maximumFractionDigits: 0
-    }).format(value);
+  // 컴포넌트 마운트 시 버스 데이터와 노선 데이터 불러오기
+  useEffect(() => {
+    fetchBuses();
+    fetchRoutes();
+  }, []);
+
+  // 버스 목록 불러오기
+  const fetchBuses = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await ApiService.apiRequest('bus');
+      console.log('API 응답 데이터:', response);
+      
+      if (response && Array.isArray(response.data)) {
+        setBuses(response.data);
+      } else if (response && response.data) {
+        setBuses(response.data);
+      } else {
+        console.error('응답 데이터 형식이 예상과 다릅니다:', response);
+        setBuses([]);
+      }
+    } catch (err) {
+      console.error('Error fetching buses:', err);
+      setError('버스 정보를 불러오는데 실패했습니다.');
+      setBuses([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 키로수를 포맷팅하는 함수
-  const formatMileage = (value) => {
-    return new Intl.NumberFormat('ko-KR').format(value) + ' km';
+  // 노선 목록 불러오기
+  const fetchRoutes = async () => {
+    try {
+      const response = await ApiService.apiRequest('route');
+      if (response && Array.isArray(response.data)) {
+        setRoutes(response.data);
+      } else if (response && response.data) {
+        setRoutes(response.data);
+      } else {
+        console.error('노선 데이터 형식이 예상과 다릅니다:', response);
+        setRoutes([]);
+      }
+    } catch (err) {
+      console.error('Error fetching routes:', err);
+      setRoutes([]);
+    }
   };
 
-  const handleBusClick = (bus) => {
+  // 특정 버스 상세 정보 불러오기 
+  const fetchBusDetail = async (busNumber) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await ApiService.apiRequest(`bus/${busNumber}`);
+      if (response) {
+        setBusDetails(response);
+        return response;
+      } else {
+        setError('버스 상세 정보를 불러오는데 실패했습니다.');
+        return null;
+      }
+    } catch (err) {
+      console.error(`Error fetching bus ${busNumber} detail:`, err);
+      setError('버스 상세 정보를 불러오는데 실패했습니다.');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 버스 좌석 정보 불러오기
+  const fetchBusSeats = async (busNumber) => {
+    try {
+      const response = await ApiService.apiRequest(`bus/seats/${busNumber}`);
+      if (response) {
+        setBusSeats(response);
+        return response;
+      }
+      return null;
+    } catch (err) {
+      console.error(`Error fetching bus ${busNumber} seats:`, err);
+      return null;
+    }
+  };
+
+  // 버스 위치 정보 불러오기
+  const fetchBusLocation = async (busNumber) => {
+    try {
+      const response = await ApiService.apiRequest(`bus/location/${busNumber}`);
+      if (response) {
+        setBusLocation(response);
+        return response;
+      }
+      return null;
+    } catch (err) {
+      console.error(`Error fetching bus ${busNumber} location:`, err);
+      return null;
+    }
+  };
+
+  const handleBusClick = async (bus) => {
     setSelectedBus(bus);
     setShowAddForm(false);
     setShowEditForm(false);
+    
+    // 상세 정보, 좌석 정보, 위치 정보 불러오기
+    const busDetail = await fetchBusDetail(bus.busNumber);
+    if (busDetail) {
+      await Promise.all([
+        fetchBusSeats(bus.busNumber),
+        fetchBusLocation(bus.busNumber)
+      ]);
+    }
   };
 
   const handleAddBusClick = () => {
     setSelectedBus(null);
+    setBusDetails(null);
+    setBusSeats(null);
+    setBusLocation(null);
     setShowAddForm(true);
     setShowEditForm(false);
+    setNewBus({
+      busNumber: '',
+      routeId: routes.length > 0 ? routes[0].id : '',
+      totalSeats: 45
+    });
   };
 
-  const handleDeleteBus = (id) => {
+  const handleDeleteBus = async (busNumber) => {
     if (window.confirm('정말로 이 버스를 삭제하시겠습니까?')) {
-      setBuses(buses.filter(bus => bus.id !== id));
-      if (selectedBus && selectedBus.id === id) {
-        setSelectedBus(null);
+      try {
+        await ApiService.apiRequest(`bus/${busNumber}`, 'DELETE');
+        setBuses(buses.filter(bus => bus.busNumber !== busNumber));
+        if (selectedBus && selectedBus.busNumber === busNumber) {
+          setSelectedBus(null);
+          setBusDetails(null);
+          setBusSeats(null);
+          setBusLocation(null);
+        }
+        alert('버스가 성공적으로 삭제되었습니다.');
+      } catch (err) {
+        console.error('Error deleting bus:', err);
+        alert('버스 삭제에 실패했습니다.');
       }
     }
   };
 
   const handleBusInputChange = (e) => {
     const { name, value } = e.target;
-    // 입력값 형식에 따라 적절한 타입으로 변환
-    let processedValue = value;
     
-    if (name === 'capacity' || name === 'year') {
-      processedValue = parseInt(value) || '';
-    } else if (name === 'price' || name === 'mileage') {
-      // 콤마 제거 후 숫자로 변환
-      processedValue = parseInt(value.replace(/,/g, '')) || 0;
+    let processedValue = value;
+    if (name === 'totalSeats') {
+      processedValue = parseInt(value) || 45;
     }
     
     setEditBus({
@@ -235,14 +191,10 @@ function BusManagement() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    // 입력값 형식에 따라 적절한 타입으로 변환
-    let processedValue = value;
     
-    if (name === 'capacity' || name === 'year') {
-      processedValue = parseInt(value) || '';
-    } else if (name === 'price' || name === 'mileage') {
-      // 콤마 제거 후 숫자로 변환
-      processedValue = parseInt(value.replace(/,/g, '')) || 0;
+    let processedValue = value;
+    if (name === 'totalSeats') {
+      processedValue = parseInt(value) || 45;
     }
     
     setNewBus({
@@ -251,81 +203,90 @@ function BusManagement() {
     });
   };
 
-  const handleAddBus = (e) => {
+  const handleAddBus = async (e) => {
     e.preventDefault();
-    const newBusEntry = {
-      id: buses.length + 1,
-      operationRecords: [],
-      ...newBus
+    
+    // API 요청 파라미터 구성 - Admin ROLE만 사용 가능한 API
+    const busData = {
+      busNumber: newBus.busNumber,
+      routeId: newBus.routeId,
+      totalSeats: newBus.totalSeats
     };
-
-    setBuses([...buses, newBusEntry]);
-    setShowAddForm(false);
-    setNewBus({
-      number: '',
-      model: '',
-      capacity: 40,
-      manufactureDate: '',
-      year: new Date().getFullYear(),
-      price: 0,
-      mileage: 0,
-      fuel: '디젤',
-      maintenanceStatus: '양호',
-      lastMaintenanceDate: '',
-      insuranceExpiryDate: ''
-    });
+    
+    try {
+      console.log('보내는 데이터:', busData);
+      const response = await ApiService.apiRequest('bus', 'POST', busData);
+      
+      if (response) {
+        console.log('저장된 버스 데이터:', response);
+        fetchBuses(); // 버스 목록 새로고침
+        setShowAddForm(false);
+        alert('버스가 성공적으로 등록되었습니다.');
+      }
+    } catch (err) {
+      console.error('Error adding bus:', err);
+      if (err.message && err.message.includes('ADMIN ROLE')) {
+        alert('버스 등록에 실패했습니다. 관리자 권한이 필요합니다.');
+      } else {
+        alert('버스 등록에 실패했습니다.');
+      }
+    }
   };
 
   const handleEditBusClick = () => {
     if (selectedBus) {
-      setEditBus({...selectedBus});
+      const busToEdit = {
+        busNumber: selectedBus.busNumber,
+        routeId: selectedBus.routeId || '',
+        totalSeats: selectedBus.totalSeats || 45
+      };
+      
+      setEditBus(busToEdit);
       setShowEditForm(true);
     } else {
       alert('먼저 버스를 선택해주세요.');
     }
   };
 
-  const handleUpdateBus = (e) => {
+  const handleUpdateBus = async (e) => {
     e.preventDefault();
     
-    // 운행 기록을 유지하기 위해 선택된 버스의 운행 기록 복사
-    const updatedBus = {
-      ...editBus,
-      operationRecords: selectedBus.operationRecords
-    };
-    
-    setBuses(buses.map(bus => 
-      bus.id === updatedBus.id ? updatedBus : bus
-    ));
-    setSelectedBus(updatedBus);
-    setShowEditForm(false);
-  };
-
-  // 화면에 표시할 연식 계산
-  const calculateAge = (year) => {
-    const currentYear = new Date().getFullYear();
-    return currentYear - year;
-  };
-
-  // 보험 만료일 상태 확인
-  const checkInsuranceStatus = (expiryDate) => {
-    const today = new Date();
-    const expiry = new Date(expiryDate);
-    const diffTime = expiry - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) {
-      return { status: '만료', className: 'expired' };
-    } else if (diffDays <= 30) {
-      return { status: '만료 임박', className: 'expiring-soon' };
-    } else {
-      return { status: '유효', className: 'valid' };
+    try {
+      console.log('업데이트 데이터:', editBus);
+      const response = await ApiService.apiRequest('bus', 'PUT', editBus);
+      
+      if (response) {
+        // 업데이트 성공 후 버스 목록 새로고침
+        fetchBuses();
+        // 선택된 버스 상세 정보 새로고침
+        if (selectedBus) {
+          const updatedBusDetail = await fetchBusDetail(editBus.busNumber);
+          if (updatedBusDetail) {
+            setSelectedBus(updatedBusDetail);
+          }
+        }
+        setShowEditForm(false);
+        alert('버스 정보가 성공적으로 수정되었습니다.');
+      }
+    } catch (err) {
+      console.error('Error updating bus:', err);
+      alert('버스 정보 수정에 실패했습니다.');
     }
+  };
+
+  // 노선 이름 찾기
+  const getRouteName = (routeId) => {
+    if (!routeId) return '정보 없음';
+    const route = routes.find(r => r.id === routeId);
+    return route ? route.name : routeId;
   };
 
   return (
     <div className="bus-management">
       <h1>버스 관리</h1>
+      
+      {error && <div className="error-message">{error}</div>}
+      
       <div className="management-container">
         <div className="list-section">
           <div className="list-header">
@@ -333,28 +294,34 @@ function BusManagement() {
             <button onClick={handleAddBusClick} className="add-button">+ 버스 등록</button>
           </div>
           <div className="bus-list">
-            {buses.map(bus => (
-              <div
-                key={bus.id}
-                className={`bus-item ${selectedBus && selectedBus.id === bus.id ? 'selected' : ''}`}
-                onClick={() => handleBusClick(bus)}
-              >
-                <div className="bus-info">
-                  <h3>버스 {bus.number}</h3>
-                  <p>{bus.model} | {bus.capacity}석 | {bus.year}년식</p>
-                  <p className="bus-mileage">{formatMileage(bus.mileage)}</p>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteBus(bus.id);
-                  }}
-                  className="delete-button"
+            {loading && buses.length === 0 ? (
+              <div className="loading">로딩 중...</div>
+            ) : buses.length === 0 ? (
+              <div className="empty-list">등록된 버스가 없습니다.</div>
+            ) : (
+              buses.map(bus => (
+                <div
+                  key={bus.busNumber}
+                  className={`bus-item ${selectedBus && selectedBus.busNumber === bus.busNumber ? 'selected' : ''}`}
+                  onClick={() => handleBusClick(bus)}
                 >
-                  삭제
-                </button>
-              </div>
-            ))}
+                  <div className="bus-info">
+                    <h3>버스 {bus.busNumber}</h3>
+                    <p>총 좌석: {bus.totalSeats || '정보 없음'}</p>
+                    <p className="route-info">노선: {getRouteName(bus.routeId)}</p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteBus(bus.busNumber);
+                    }}
+                    className="delete-button"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -373,78 +340,61 @@ function BusManagement() {
                     <div className="detail-section-title">기본 정보</div>
                     <div className="detail-row">
                       <label>버스 번호:</label>
-                      <span>{selectedBus.number}</span>
+                      <span>{selectedBus.busNumber}</span>
                     </div>
                     <div className="detail-row">
-                      <label>버스 모델명:</label>
-                      <span>{selectedBus.model}</span>
+                      <label>노선:</label>
+                      <span>{getRouteName(selectedBus.routeId)}</span>
                     </div>
                     <div className="detail-row">
-                      <label>좌석 정원:</label>
-                      <span>{selectedBus.capacity}석</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>출고 날짜:</label>
-                      <span>{selectedBus.manufactureDate}</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>연식:</label>
-                      <span>{selectedBus.year}년 ({calculateAge(selectedBus.year)}년 경과)</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>구매 가격:</label>
-                      <span>{formatCurrency(selectedBus.price)}</span>
+                      <label>총 좌석:</label>
+                      <span>{selectedBus.totalSeats || '정보 없음'}</span>
                     </div>
                     
-                    <div className="detail-section-title">운행 및 정비 정보</div>
-                    <div className="detail-row">
-                      <label>운행 키로수:</label>
-                      <span>{formatMileage(selectedBus.mileage)}</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>연료 종류:</label>
-                      <span>{selectedBus.fuel}</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>정비 상태:</label>
-                      <span className={`maintenance-status ${selectedBus.maintenanceStatus === '양호' ? 'good' : selectedBus.maintenanceStatus === '정비 중' ? 'in-maintenance' : 'needs-maintenance'}`}>
-                        {selectedBus.maintenanceStatus}
-                      </span>
-                    </div>
-                    <div className="detail-row">
-                      <label>최근 정비일:</label>
-                      <span>{selectedBus.lastMaintenanceDate}</span>
-                    </div>
+                    {busSeats && (
+                      <>
+                        <div className="detail-section-title">좌석 정보</div>
+                        <div className="detail-row">
+                          <label>탑승 좌석:</label>
+                          <span>{busSeats.occupiedSeats || 0}석</span>
+                        </div>
+                        <div className="detail-row">
+                          <label>가용 좌석:</label>
+                          <span>{busSeats.availableSeats || selectedBus.totalSeats}석</span>
+                        </div>
+                      </>
+                    )}
                     
-                  </div>
-                  
-                  <div className="operation-records">
-                    <h3>운행 기록</h3>
-                    {selectedBus.operationRecords && selectedBus.operationRecords.length > 0 ? (
-                      <table className="records-table">
-                        <thead>
-                          <tr>
-                            <th>날짜</th>
-                            <th>노선</th>
-                            <th>운전자</th>
-                            <th>운행 시작 시간</th>
-                            <th>운행 종료 시간</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedBus.operationRecords.map((record) => (
-                            <tr key={record.id}>
-                              <td>{record.date}</td>
-                              <td>{record.route}</td>
-                              <td>{record.driverName}</td>
-                              <td>{record.startTime}</td>
-                              <td>{record.endTime}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <p className="no-records">운행 기록이 없습니다.</p>
+                    {busLocation && (
+                      <>
+                        <div className="detail-section-title">위치 정보</div>
+                        <div className="detail-row">
+                          <label>위치 좌표:</label>
+                          <span>
+                            {busLocation.coordinates ? 
+                              `위도: ${busLocation.coordinates[0]}, 경도: ${busLocation.coordinates[1]}` : 
+                              '위치 정보 없음'}
+                          </span>
+                        </div>
+                        <div className="detail-row">
+                          <label>마지막 정류장:</label>
+                          <span>{busLocation.prevStationId || '정보 없음'}</span>
+                        </div>
+                        <div className="detail-row">
+                          <label>마지막 업데이트:</label>
+                          <span>{busLocation.timestamp ? new Date(busLocation.timestamp).toLocaleString() : '정보 없음'}</span>
+                        </div>
+                      </>
+                    )}
+                    
+                    {busDetails && busDetails.organizationId && (
+                      <>
+                        <div className="detail-section-title">기타 정보</div>
+                        <div className="detail-row">
+                          <label>소속:</label>
+                          <span>{busDetails.organizationId}</span>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -455,125 +405,42 @@ function BusManagement() {
                     <div className="form-section">
                       <div className="form-section-title">기본 정보</div>
                       <div className="form-group">
-                        <label htmlFor="number">버스 번호</label>
+                        <label htmlFor="busNumber">버스 번호</label>
                         <input 
                           type="text" 
-                          id="number" 
-                          name="number" 
-                          value={editBus.number} 
+                          id="busNumber" 
+                          name="busNumber" 
+                          value={editBus.busNumber} 
                           onChange={handleBusInputChange} 
                           required 
+                          readOnly // 버스 번호는 변경 불가능
                         />
+                        <small className="form-hint">버스 번호는 변경할 수 없습니다.</small>
                       </div>
                       <div className="form-group">
-                        <label htmlFor="model">버스 모델명</label>
-                        <input 
-                          type="text" 
-                          id="model" 
-                          name="model" 
-                          value={editBus.model} 
+                        <label htmlFor="routeId">노선</label>
+                        <select 
+                          id="routeId" 
+                          name="routeId" 
+                          value={editBus.routeId} 
                           onChange={handleBusInputChange} 
-                          required 
-                        />
+                          required
+                        >
+                          <option value="">노선을 선택하세요</option>
+                          {routes.map(route => (
+                            <option key={route.id} value={route.id}>{route.name}</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="form-group">
-                        <label htmlFor="capacity">좌석 정원</label>
+                        <label htmlFor="totalSeats">총 좌석</label>
                         <input 
                           type="number" 
-                          id="capacity" 
-                          name="capacity" 
+                          id="totalSeats" 
+                          name="totalSeats" 
                           min="1"
-                          value={editBus.capacity} 
-                          onChange={handleBusInputChange} 
-                          required 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="manufactureDate">출고 날짜</label>
-                        <input 
-                          type="date" 
-                          id="manufactureDate" 
-                          name="manufactureDate" 
-                          value={editBus.manufactureDate} 
-                          onChange={handleBusInputChange} 
-                          required 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="year">연식</label>
-                        <input 
-                          type="number" 
-                          id="year" 
-                          name="year" 
-                          min="1990"
-                          max={new Date().getFullYear()}
-                          value={editBus.year} 
-                          onChange={handleBusInputChange} 
-                          required 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="price">구매 가격(원)</label>
-                        <input 
-                          type="text" 
-                          id="price" 
-                          name="price" 
-                          value={editBus.price.toLocaleString()} 
-                          onChange={handleBusInputChange} 
-                          required 
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="form-section">
-                      <div className="form-section-title">운행 및 정비 정보</div>
-                      <div className="form-group">
-                        <label htmlFor="mileage">운행 키로수(km)</label>
-                        <input 
-                          type="text" 
-                          id="mileage" 
-                          name="mileage" 
-                          value={editBus.mileage.toLocaleString()} 
-                          onChange={handleBusInputChange} 
-                          required 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="fuel">연료 종류</label>
-                        <select
-                          id="fuel"
-                          name="fuel"
-                          value={editBus.fuel}
-                          onChange={handleBusInputChange}
-                          required
-                        >
-                          <option value="디젤">디젤</option>
-                          <option value="CNG">CNG</option>
-                          <option value="전기">전기</option>
-                          <option value="수소">수소</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="maintenanceStatus">정비 상태</label>
-                        <select
-                          id="maintenanceStatus"
-                          name="maintenanceStatus"
-                          value={editBus.maintenanceStatus}
-                          onChange={handleBusInputChange}
-                          required
-                        >
-                          <option value="양호">양호</option>
-                          <option value="점검 필요">점검 필요</option>
-                          <option value="정비 중">정비 중</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="lastMaintenanceDate">최근 정비일</label>
-                        <input 
-                          type="date" 
-                          id="lastMaintenanceDate" 
-                          name="lastMaintenanceDate" 
-                          value={editBus.lastMaintenanceDate} 
+                          max="100"
+                          value={editBus.totalSeats} 
                           onChange={handleBusInputChange} 
                           required 
                         />
@@ -603,127 +470,46 @@ function BusManagement() {
                 <div className="form-section">
                   <div className="form-section-title">기본 정보</div>
                   <div className="form-group">
-                    <label htmlFor="number">버스 번호</label>
+                    <label htmlFor="busNumber">버스 번호 (3~6자리 고유 코드)</label>
                     <input
                       type="text"
-                      id="number"
-                      name="number"
-                      value={newBus.number}
+                      id="busNumber"
+                      name="busNumber"
+                      value={newBus.busNumber}
                       onChange={handleInputChange}
                       required
+                      minLength="3"
+                      maxLength="6"
+                      pattern="[0-9]+"
                     />
+                    <small className="form-hint">3~6자리의 숫자로 입력하세요.</small>
                   </div>
                   <div className="form-group">
-                    <label htmlFor="model">버스 모델명</label>
-                    <input
-                      type="text"
-                      id="model"
-                      name="model"
-                      value={newBus.model}
-                      onChange={handleInputChange}
+                    <label htmlFor="routeId">노선</label>
+                    <select 
+                      id="routeId" 
+                      name="routeId" 
+                      value={newBus.routeId} 
+                      onChange={handleInputChange} 
                       required
-                    />
+                    >
+                      <option value="">노선을 선택하세요</option>
+                      {routes.map(route => (
+                        <option key={route.id} value={route.id}>{route.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="form-group">
-                    <label htmlFor="capacity">좌석 정원</label>
+                    <label htmlFor="totalSeats">총 좌석</label>
                     <input
                       type="number"
-                      id="capacity"
-                      name="capacity"
+                      id="totalSeats"
+                      name="totalSeats"
                       min="1"
-                      value={newBus.capacity}
+                      max="100"
+                      value={newBus.totalSeats}
                       onChange={handleInputChange}
                       required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="manufactureDate">출고 날짜</label>
-                    <input 
-                      type="date" 
-                      id="manufactureDate" 
-                      name="manufactureDate" 
-                      value={newBus.manufactureDate} 
-                      onChange={handleInputChange} 
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="year">연식</label>
-                    <input 
-                      type="number" 
-                      id="year" 
-                      name="year" 
-                      min="1990"
-                      max={new Date().getFullYear()}
-                      value={newBus.year} 
-                      onChange={handleInputChange} 
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="price">구매 가격(원)</label>
-                    <input 
-                      type="text" 
-                      id="price" 
-                      name="price" 
-                      value={newBus.price.toLocaleString()} 
-                      onChange={handleInputChange} 
-                      required 
-                    />
-                  </div>
-                </div>
-                
-                <div className="form-section">
-                  <div className="form-section-title">운행 및 정비 정보</div>
-                  <div className="form-group">
-                    <label htmlFor="mileage">운행 키로수(km)</label>
-                    <input 
-                      type="text" 
-                      id="mileage" 
-                      name="mileage" 
-                      value={newBus.mileage.toLocaleString()} 
-                      onChange={handleInputChange} 
-                      required 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="fuel">연료 종류</label>
-                    <select
-                      id="fuel"
-                      name="fuel"
-                      value={newBus.fuel}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="디젤">디젤</option>
-                      <option value="CNG">CNG</option>
-                      <option value="전기">전기</option>
-                      <option value="수소">수소</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="maintenanceStatus">정비 상태</label>
-                    <select
-                      id="maintenanceStatus"
-                      name="maintenanceStatus"
-                      value={newBus.maintenanceStatus}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="양호">양호</option>
-                      <option value="점검 필요">점검 필요</option>
-                      <option value="정비 중">정비 중</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="lastMaintenanceDate">최근 정비일</label>
-                    <input 
-                      type="date" 
-                      id="lastMaintenanceDate" 
-                      name="lastMaintenanceDate" 
-                      value={newBus.lastMaintenanceDate} 
-                      onChange={handleInputChange} 
-                      required 
                     />
                   </div>
                 </div>
@@ -737,6 +523,10 @@ function BusManagement() {
                   >
                     취소
                   </button>
+                </div>
+                
+                <div className="admin-notice">
+                  <p>※ 버스 등록은 관리자 권한이 필요합니다.</p>
                 </div>
               </form>
             </div>
