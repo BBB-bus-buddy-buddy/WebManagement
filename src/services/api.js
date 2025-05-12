@@ -63,11 +63,43 @@ class ApiService {
   }
   
   /**
-   * 로그아웃
-   */
-  static logout() {
+ * 로그아웃 - 모든 쿠키 및 세션 데이터 삭제
+ * @returns {boolean} 로그아웃 성공 여부
+ */
+static logout() {
+  try {
+    // 1. 쿠키 삭제
+    // 1.1. 기존 auth_token 쿠키 삭제
     cookies.remove('auth_token', { path: '/' });
+    
+    // 1.2. 모든 쿠키 삭제
+    const allCookies = cookies.getAll();
+    console.log('삭제할 쿠키 목록:', allCookies);
+    
+    Object.keys(allCookies).forEach(cookieName => {
+      console.log(`쿠키 삭제: ${cookieName}`);
+      // 다양한 경로에 설정된 쿠키도 삭제
+      cookies.remove(cookieName, { path: '/' });
+      cookies.remove(cookieName, { path: '/dashboard' });
+      cookies.remove(cookieName, { path: '/admin' });
+      cookies.remove(cookieName);
+    });
+    
+    // 2. 브라우저 저장소 삭제
+    // 2.1. 로컬 스토리지 데이터 삭제
+    localStorage.clear();
+    
+    // 2.2. 세션 스토리지 데이터 삭제
+    sessionStorage.clear();
+    
+    console.log('모든 인증 데이터가 삭제되었습니다.');
+    return true;
+  } catch (error) {
+    console.error('로그아웃 중 오류 발생:', error);
+    // 오류가 발생해도 사용자는 로그아웃되어야 함
+    return true;
   }
+}
   
   /**
    * 토큰 가져오기
@@ -538,12 +570,75 @@ static convertToServerFormat(appData, drivers, buses, routes) {
 
 // ==================== 이용자 관련 메서드 ====================
 /**
- * 모든 이용자 조회 (USER 역할만)
- * @returns {Promise<Array>} 이용자 목록
+ * 이용자 데이터 응답 구조 처리 유틸리티 메서드
+ * "List<User> user" 형태의 응답 구조 처리를 위한 메서드
+ * @param {Object} response API 응답 객체
+ * @returns {Array} 처리된 사용자 배열
+ */
+static extractUserList(response) {
+  if (!response) {
+    console.error('API 응답이 없습니다.');
+    return [];
+  }
+  
+  // 응답 확인을 위한 로깅
+  console.log('사용자 데이터 응답 구조:', response);
+  
+  // 응답 구조 확인 - 다양한 가능한 응답 구조 처리
+  
+  // 케이스 1: response.user가 배열인 경우 (List<User> user)
+  if (response.user && Array.isArray(response.user)) {
+    console.log('케이스 1: response.user 배열 발견');
+    return response.user;
+  }
+  
+  // 케이스 2: response.data.user가 배열인 경우
+  if (response.data && response.data.user && Array.isArray(response.data.user)) {
+    console.log('케이스 2: response.data.user 배열 발견');
+    return response.data.user;
+  }
+  
+  // 케이스 3: response.data가 배열인 경우 (기존 구조)
+  if (response.data && Array.isArray(response.data)) {
+    console.log('케이스 3: response.data 배열 발견');
+    return response.data;
+  }
+  
+  // 케이스 4: response 자체가 배열인 경우
+  if (Array.isArray(response)) {
+    console.log('케이스 4: response 자체가 배열');
+    return response;
+  }
+  
+  // 알 수 없는 구조인 경우 빈 배열 반환
+  console.error('API 응답에서 사용자 목록을 찾을 수 없습니다:', response);
+  return [];
+}
+
+/**
+ * 모든 이용자 조회 수정 (List<User> user 응답 구조 처리)
+ * @returns {Promise<Object>} 이용자 목록이 담긴 응답 객체
  */
 static async getAllUsers() {
-  const data = await ApiService.apiRequest('user?role=USER');
-  return ApiService.convertUsers(data);
+  try {
+    const response = await ApiService.apiRequest('user');
+    
+    // 응답에서 사용자 목록 추출
+    const userList = ApiService.extractUserList(response);
+
+    console.log('추출된 사용자 목록:', userList);
+    
+    // USER 역할만 필터링
+    const userRoleOnly = userList.filter(user => user && user.role === 'USER');
+    
+    return {
+      data: userRoleOnly,
+      message: response.message || '이용자 목록을 가져왔습니다.'
+    };
+  } catch (error) {
+    console.error('이용자 조회 실패:', error);
+    throw error;
+  }
 }
 
 /**

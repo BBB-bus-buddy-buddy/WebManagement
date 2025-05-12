@@ -763,10 +763,6 @@ const handleUpdateStation = async (e) => {
                     경도 {selectedStation.location.coordinates[1].toFixed(6)}
                   </span>
                 </div>
-                <div className="detail-row">
-                  <label>ID:</label>
-                  <span>{selectedStation.id}</span>
-                </div>
               </div>
               
               <div className="map-section">
