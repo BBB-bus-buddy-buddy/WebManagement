@@ -25,7 +25,7 @@ function Header({ user, onLogout }) {
   return (
     <header className="header">
       <Link to="/dashboard" className="header-title">버스 관리 시스템</Link>
-      <div className="user-info">
+      <div className="header-info">
         <span>{user?.name || user?.organizationId} 님</span>
         <Link to="/profile">내 정보</Link>
         <button onClick={handleLogout} className="logout-button">로그아웃</button>
