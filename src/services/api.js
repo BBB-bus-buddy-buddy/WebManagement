@@ -1,7 +1,7 @@
 // services/api.js (토큰 인증 추가)
 import { Cookies } from 'react-cookie';
 
-const API_BASE_URL = 'http://DevSe.gonetis.com:12589/api';
+const API_BASE_URL = 'http://devse.kr:12589/api';
 const cookies = new Cookies();
 
 /**
