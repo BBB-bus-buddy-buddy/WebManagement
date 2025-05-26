@@ -1,217 +1,222 @@
 // components/UserManagement.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import ApiService from '../services/api';
+import '../styles/UserManagement.css';
 
 function UserManagement() {
-  // Dummy data for users - 데이터 형식 변경
-  const [users, setUsers] = useState([
-    {
-      id: 1,
-      name: '홍길동',
-      birthDate: '1990-03-15',
-      age: 35,
-      gender: '남성',
-      phone: '010-1234-5678',
-      joinYear: 2020,
-      rideHistory: [
-        { 
-          id: 1,
-          busInfo: { number: '108', route: '강남-송파' },
-          boardingStation: '강남역',
-          boardingTime: '08:15',
-          alightingStation: '송파역',
-          alightingTime: '08:45',
-          date: '2025-03-30'
-        },
-        { 
-          id: 2,
-          busInfo: { number: '302', route: '서초-강남' },
-          boardingStation: '서초역',
-          boardingTime: '17:30',
-          alightingStation: '강남역',
-          alightingTime: '17:50',
-          date: '2025-03-29'
-        }
-      ]
-    },
-    {
-      id: 2,
-      name: '김영희',
-      birthDate: '1995-08-22',
-      age: 30,
-      gender: '여성',
-      phone: '010-9876-5432',
-      joinYear: 2021,
-      rideHistory: [
-        { 
-          id: 1,
-          busInfo: { number: '401', route: '송파-강동' },
-          boardingStation: '송파역',
-          boardingTime: '09:45',
-          alightingStation: '강동역',
-          alightingTime: '10:15',
-          date: '2025-03-30'
-        }
-      ]
-    },
-    {
-      id: 3,
-      name: '박철수',
-      birthDate: '1988-12-10',
-      age: 37,
-      gender: '남성',
-      phone: '010-5555-7777',
-      joinYear: 2019,
-      rideHistory: [
-        { 
-          id: 1,
-          busInfo: { number: '108', route: '강남-송파' },
-          boardingStation: '강남역',
-          boardingTime: '10:20',
-          alightingStation: '석촌역',
-          alightingTime: '10:40',
-          date: '2025-03-30'
-        },
-        { 
-          id: 2,
-          busInfo: { number: '108', route: '강남-송파' },
-          boardingStation: '석촌역',
-          boardingTime: '16:30',
-          alightingStation: '송파역',
-          alightingTime: '16:45',
-          date: '2025-03-30'
-        },
-        { 
-          id: 3,
-          busInfo: { number: '302', route: '서초-강남' },
-          boardingStation: '서초역',
-          boardingTime: '09:15',
-          alightingStation: '강남역',
-          alightingTime: '09:35',
-          date: '2025-03-28'
-        }
-      ]
-    }
-  ]);
-
+  const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [organizations, setOrganizations] = useState({
+    "Uasidnw": "울산과학대학교" // 기본 조직 정보
+  });
 
+  // 컴포넌트 마운트 시 이용자 데이터 로드
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // 이용자 데이터 가져오기
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      const response = await ApiService.apiRequest('user?role=USER');
+      
+      console.log('API 응답 데이터:', response);
+      
+      // 응답 구조 확인 - user 속성에 배열이 있는지 확인
+      if (response && response.user && Array.isArray(response.user)) {
+        // "List<User> user" 형태로 온 응답 처리
+        const userList = response.user;
+        console.log('사용자 목록 데이터:', userList);
+        
+        // USER 역할을 가진 사용자만 필터링
+        const userRoleOnly = userList.filter(user => user && user.role === 'USER');
+        setUsers(userRoleOnly);
+        console.log('USER 역할을 가진 이용자만 필터링:', userRoleOnly);
+      } 
+      // data 속성 안에 user 배열이 있는지 확인
+      else if (response && response.data && response.data.user && Array.isArray(response.data.user)) {
+        const userList = response.data.user;
+        const userRoleOnly = userList.filter(user => user && user.role === 'USER');
+        setUsers(userRoleOnly);
+      }
+      // 기존 구조 확인 (data 배열로 직접 오는 경우)
+      else if (response && response.data && Array.isArray(response.data)) {
+        const userRoleOnly = response.data.filter(user => user && user.role === 'USER');
+        setUsers(userRoleOnly);
+      } 
+      else {
+        console.error('응답 데이터 형식이 예상과 다릅니다:', response);
+        setUsers([]);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('이용자 데이터 로드 중 오류:', err);
+      setError('이용자 데이터를 불러오는 중 오류가 발생했습니다.');
+      setUsers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 이용자 클릭 처리 - 상세 조회 API 호출 없이 목록 데이터 사용
   const handleUserClick = (user) => {
+    // 이미 선택된 사용자면 아무 작업 없음
+    if (selectedUser && selectedUser.id === user.id) {
+      return;
+    }
+    
+    // 목록에서 가져온 사용자 정보를 바로 표시
     setSelectedUser(user);
   };
 
+  // 검색 처리
   const handleSearch = (e) => {
     setSearchQuery(e.target.value);
   };
 
-  const handleDeleteUser = (id) => {
+  // 이용자 삭제
+  const handleDeleteUser = async (id) => {
+    if (!id) {
+      console.error('삭제할 이용자의 ID가 없습니다');
+      return;
+    }
+    
     if (window.confirm('정말로 이 이용자를 삭제하시겠습니까?')) {
-      setUsers(users.filter(user => user.id !== id));
-      if (selectedUser && selectedUser.id === id) {
-        setSelectedUser(null);
+      try {
+        await ApiService.apiRequest(`user/${id}`, 'DELETE');
+        
+        // 성공적으로 삭제된 후 이용자 목록 새로고침
+        fetchUsers();
+        
+        if (selectedUser && selectedUser.id === id) {
+          setSelectedUser(null);
+        }
+        
+        alert('이용자가 삭제되었습니다.');
+      } catch (error) {
+        console.error('이용자 삭제 중 오류:', error);
+        alert('이용자 삭제 중 오류가 발생했습니다.');
       }
     }
   };
 
+  // 검색어에 따라 이용자 필터링 - 안전한 버전으로 수정
   const filteredUsers = users.filter(user =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.phone.includes(searchQuery)
+    // 사용자 객체가 존재하는지 먼저 확인
+    user && (
+      // 이름으로 검색
+      (user.name && user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      // 이메일로 검색
+      (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
   );
 
+  // 조직 ID로 조직명 가져오기
+  const getOrganizationName = (orgId) => {
+    if (!orgId) return '정보 없음';
+    return organizations[orgId] || orgId;
+  };
+
+  // 로딩 상태 표시
+  if (isLoading && users.length === 0) {
+    return (
+      <div className="loading-container">
+        <p>데이터를 불러오는 중입니다...</p>
+      </div>
+    );
+  }
+
+  console.log('렌더링 전 이용자 목록:', filteredUsers);
+  
   return (
     <div className="user-management">
       <h1>이용자 관리</h1>
+      
+      {error && <div className="error-message">{error}</div>}
+      
       <div className="management-container">
         <div className="list-section">
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="이름 또는 전화번호로 검색"
-              value={searchQuery}
-              onChange={handleSearch}
-            />
+          <div className="list-header">
+            <h2>이용자 목록</h2>
+            <div className="search-container">
+              <input
+                type="text"
+                placeholder="이름으로 검색"
+                value={searchQuery}
+                onChange={handleSearch}
+                className="search-input"
+              />
+            </div>
           </div>
           <div className="user-list">
-            {filteredUsers.map(user => (
-              <div 
-                key={user.id} 
-                className={`user-item ${selectedUser && selectedUser.id === user.id ? 'selected' : ''}`}
-                onClick={() => handleUserClick(user)}
-              >
-                <div className="user-info">
-                  <h3>{user.name}</h3>
-                  <p>{user.phone} | {user.age}세</p>
-                </div>
-                <div className="user-actions">
-                  <div className="ride-count">
-                    <span>총 {user.rideHistory.length}회 탑승</span>
+            {isLoading ? (
+              <div className="loading">로딩 중...</div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="empty-list">등록된 이용자가 없습니다.</div>
+            ) : (
+              filteredUsers.map(user => (
+                <div 
+                  key={user.id || 'unknown'} // 안전한 key 제공
+                  className={`user-item ${selectedUser && selectedUser.id === user.id ? 'selected' : ''}`}
+                  onClick={() => handleUserClick(user)}
+                >
+                  <div className="user-info">
+                    <h3>{user.name || '이름 없음'}</h3>
                   </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteUser(user.id);
-                    }} 
-                    className="delete-button"
-                  >
-                    삭제
-                  </button>
+                  <div className="user-actions">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteUser(user.id);
+                      }} 
+                      className="delete-button"
+                    >
+                      삭제
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
         
         <div className="detail-section">
           {selectedUser ? (
             <div className="user-details">
-              <h2>이용자 상세 정보</h2>
+              <div className="detail-header">
+                <h2>이용자 상세 정보</h2>
+              </div>
               <div className="detail-info">
                 <div className="detail-row">
                   <label>이름:</label>
-                  <span>{selectedUser.name}</span>
+                  <span>{selectedUser.name || '정보 없음'}</span>
                 </div>
                 <div className="detail-row">
-                  <label>생년월일:</label>
-                  <span>{selectedUser.birthDate} ({selectedUser.age}세)</span>
+                  <label>이메일:</label>
+                  <span>{selectedUser.email || '정보 없음'}</span>
                 </div>
                 <div className="detail-row">
-                  <label>성별:</label>
-                  <span>{selectedUser.gender}</span>
+                  <label>소속:</label>
+                  <span>{getOrganizationName(selectedUser.organizationId)}</span>
                 </div>
-                <div className="detail-row">
-                  <label>전화번호:</label>
-                  <span>{selectedUser.phone}</span>
+                <div className="detail-section">
+                  <h3>즐겨찾는 정류장</h3>
+                  {selectedUser.myStations && selectedUser.myStations.length > 0 ? (
+                    <div className="stations-list">
+                      {selectedUser.myStations.map((station, index) => (
+                        <div key={index} className="station-item">
+                          <span>{typeof station === 'object' && station && station.name ? station.name : (station || '정류장 정보 없음')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p>등록된 즐겨찾기 정류장이 없습니다.</p>
+                  )}
                 </div>
-                <div className="detail-row">
-                  <label>가입 연도:</label>
-                  <span>{selectedUser.joinYear}년</span>
-                </div>
-              </div>
-              
-              <div className="ride-history">
-                <h3>탑승 기록</h3>
-                <table className="history-table">
-                  <thead>
-                    <tr>
-                      <th>날짜</th>
-                      <th>버스 번호</th>
-                      <th>노선</th>
-                      <th>탑승</th>
-                      <th>하차</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedUser.rideHistory.map((ride) => (
-                      <tr key={ride.id}>
-                        <td>{ride.date}</td>
-                        <td>{ride.busInfo.number}</td>
-                        <td>{ride.busInfo.route}</td>
-                        <td>{ride.boardingStation} ({ride.boardingTime})</td>
-                        <td>{ride.alightingStation} ({ride.alightingTime})</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           ) : (
