@@ -18,6 +18,29 @@
   text-decoration: none;
 }
 
+.header-info {
+  display: flex;
+  align-items: center;
+  margin-left: auto; /* 오른쪽 정렬을 위해 추가 */
+}
+
+.header-info span {
+  margin-right: 15px;
+  font-weight: 500;
+}
+
+.header-info a {
+  margin-right: 15px;
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+  
+  .header-info a:hover {
+    color: #0d47a1;
+  }
+
 .user-info {
   display: flex;
   align-items: center;
