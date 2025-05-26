@@ -9,9 +9,8 @@ function UserManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [organizations, setOrganizations] = useState({
-    "Uasidnw": "울산과학대학교" // 기본 조직 정보
-  });
+  const [organizationCache, setOrganizationCache] = useState({}); // 조직 정보 캐시
+  const [loadingOrganizations, setLoadingOrganizations] = useState({}); // 조직 로딩 상태
 
   // 컴포넌트 마운트 시 이용자 데이터 로드
   useEffect(() => {
@@ -32,21 +31,55 @@ function UserManagement() {
         const userList = response.user;
         console.log('사용자 목록 데이터:', userList);
         
-        // USER 역할을 가진 사용자만 필터링
-        const userRoleOnly = userList.filter(user => user && user.role === 'USER');
+        // USER 역할을 가진 사용자만 필터링하고 안전하게 처리
+        const userRoleOnly = userList.filter(user => {
+          return user && typeof user === 'object' && user.role === 'USER';
+        }).map(user => ({
+          // 안전하게 데이터 추출
+          id: user.id || user._id || 'unknown',
+          name: user.name || '이름 없음',
+          email: user.email || '이메일 없음',
+          organizationId: user.organizationId || '',
+          myStations: user.myStations || [],
+          role: user.role
+        }));
+        
         setUsers(userRoleOnly);
         console.log('USER 역할을 가진 이용자만 필터링:', userRoleOnly);
+        
+        // 사용자 목록을 가져온 후 조직 정보 미리 로드
+        preloadOrganizations(userRoleOnly);
       } 
       // data 속성 안에 user 배열이 있는지 확인
       else if (response && response.data && response.data.user && Array.isArray(response.data.user)) {
         const userList = response.data.user;
-        const userRoleOnly = userList.filter(user => user && user.role === 'USER');
+        const userRoleOnly = userList.filter(user => {
+          return user && typeof user === 'object' && user.role === 'USER';
+        }).map(user => ({
+          id: user.id || user._id || 'unknown',
+          name: user.name || '이름 없음',
+          email: user.email || '이메일 없음',
+          organizationId: user.organizationId || '',
+          myStations: user.myStations || [],
+          role: user.role
+        }));
         setUsers(userRoleOnly);
+        preloadOrganizations(userRoleOnly);
       }
       // 기존 구조 확인 (data 배열로 직접 오는 경우)
       else if (response && response.data && Array.isArray(response.data)) {
-        const userRoleOnly = response.data.filter(user => user && user.role === 'USER');
+        const userRoleOnly = response.data.filter(user => {
+          return user && typeof user === 'object' && user.role === 'USER';
+        }).map(user => ({
+          id: user.id || user._id || 'unknown',
+          name: user.name || '이름 없음',
+          email: user.email || '이메일 없음',
+          organizationId: user.organizationId || '',
+          myStations: user.myStations || [],
+          role: user.role
+        }));
         setUsers(userRoleOnly);
+        preloadOrganizations(userRoleOnly);
       } 
       else {
         console.error('응답 데이터 형식이 예상과 다릅니다:', response);
@@ -62,6 +95,73 @@ function UserManagement() {
     }
   };
 
+  // 조직 정보 미리 로드
+  const preloadOrganizations = async (userList) => {
+    const uniqueOrgIds = [...new Set(
+      userList
+        .map(user => user.organizationId)
+        .filter(orgId => orgId && !organizationCache[orgId])
+    )];
+
+    for (const orgId of uniqueOrgIds) {
+      fetchOrganizationName(orgId);
+    }
+  };
+
+  // 조직명 가져오기 (캐시 사용)
+  const fetchOrganizationName = async (orgId) => {
+    if (!orgId || organizationCache[orgId] || loadingOrganizations[orgId]) {
+      return;
+    }
+
+    setLoadingOrganizations(prev => ({ ...prev, [orgId]: true }));
+
+    try {
+      const response = await ApiService.verifyOrganization(orgId);
+      
+      if (response && response.data && response.data.name) {
+        setOrganizationCache(prev => ({
+          ...prev,
+          [orgId]: response.data.name
+        }));
+      } else {
+        // API에서 조직명을 찾을 수 없는 경우 조직 ID를 그대로 저장
+        setOrganizationCache(prev => ({
+          ...prev,
+          [orgId]: orgId
+        }));
+      }
+    } catch (error) {
+      console.error(`조직 정보 조회 실패 (${orgId}):`, error);
+      // 오류 발생 시 조직 ID를 그대로 저장
+      setOrganizationCache(prev => ({
+        ...prev,
+        [orgId]: orgId
+      }));
+    } finally {
+      setLoadingOrganizations(prev => ({ ...prev, [orgId]: false }));
+    }
+  };
+
+  // 조직 ID로 조직명 가져오기 (캐시 우선 사용)
+  const getOrganizationName = (orgId) => {
+    if (!orgId) return '정보 없음';
+    
+    // 캐시에 있는 경우 반환
+    if (organizationCache[orgId]) {
+      return organizationCache[orgId];
+    }
+    
+    // 로딩 중인 경우
+    if (loadingOrganizations[orgId]) {
+      return '조직 정보 로딩 중...';
+    }
+    
+    // 캐시에 없고 로딩 중이 아닌 경우 API 호출
+    fetchOrganizationName(orgId);
+    return orgId; // 임시로 조직 ID 반환
+  };
+
   // 이용자 클릭 처리 - 상세 조회 API 호출 없이 목록 데이터 사용
   const handleUserClick = (user) => {
     // 이미 선택된 사용자면 아무 작업 없음
@@ -71,6 +171,11 @@ function UserManagement() {
     
     // 목록에서 가져온 사용자 정보를 바로 표시
     setSelectedUser(user);
+    
+    // 선택된 사용자의 조직 정보가 없으면 가져오기
+    if (user.organizationId && !organizationCache[user.organizationId]) {
+      fetchOrganizationName(user.organizationId);
+    }
   };
 
   // 검색 처리
@@ -109,16 +214,49 @@ function UserManagement() {
     // 사용자 객체가 존재하는지 먼저 확인
     user && (
       // 이름으로 검색
-      (user.name && user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (user.name && typeof user.name === 'string' && user.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
       // 이메일로 검색
-      (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
+      (user.email && typeof user.email === 'string' && user.email.toLowerCase().includes(searchQuery.toLowerCase()))
     )
   );
 
-  // 조직 ID로 조직명 가져오기
-  const getOrganizationName = (orgId) => {
-    if (!orgId) return '정보 없음';
-    return organizations[orgId] || orgId;
+  // 즐겨찾기 정류장 렌더링을 위한 안전한 처리
+  const renderMyStations = (myStations) => {
+    if (!myStations || !Array.isArray(myStations) || myStations.length === 0) {
+      return <p>등록된 즐겨찾기 정류장이 없습니다.</p>;
+    }
+
+    return (
+      <div className="stations-list">
+        {myStations.map((station, index) => {
+          let stationName = '정류장 정보 없음';
+          
+          // station이 문자열인 경우
+          if (typeof station === 'string') {
+            stationName = station;
+          }
+          // station이 객체이고 name 속성이 있는 경우
+          else if (station && typeof station === 'object' && station.name) {
+            stationName = station.name;
+          }
+          // station이 객체이지만 id, collectionName, databaseName 같은 참조 객체인 경우
+          else if (station && typeof station === 'object') {
+            // MongoDB DBRef 객체인 경우 처리
+            if (station.id || station._id) {
+              stationName = `정류장 ID: ${station.id || station._id}`;
+            } else {
+              stationName = '정류장 정보 없음';
+            }
+          }
+          
+          return (
+            <div key={index} className="station-item">
+              <span>{stationName}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // 로딩 상태 표시
@@ -160,12 +298,12 @@ function UserManagement() {
             ) : (
               filteredUsers.map(user => (
                 <div 
-                  key={user.id || 'unknown'} // 안전한 key 제공
+                  key={user.id} // 안전한 key 제공
                   className={`user-item ${selectedUser && selectedUser.id === user.id ? 'selected' : ''}`}
                   onClick={() => handleUserClick(user)}
                 >
                   <div className="user-info">
-                    <h3>{user.name || '이름 없음'}</h3>
+                    <h3>{user.name}</h3>
                   </div>
                   <div className="user-actions">
                     <button 
@@ -193,11 +331,11 @@ function UserManagement() {
               <div className="detail-info">
                 <div className="detail-row">
                   <label>이름:</label>
-                  <span>{selectedUser.name || '정보 없음'}</span>
+                  <span>{selectedUser.name}</span>
                 </div>
                 <div className="detail-row">
                   <label>이메일:</label>
-                  <span>{selectedUser.email || '정보 없음'}</span>
+                  <span>{selectedUser.email}</span>
                 </div>
                 <div className="detail-row">
                   <label>소속:</label>
@@ -205,17 +343,7 @@ function UserManagement() {
                 </div>
                 <div className="detail-section">
                   <h3>즐겨찾는 정류장</h3>
-                  {selectedUser.myStations && selectedUser.myStations.length > 0 ? (
-                    <div className="stations-list">
-                      {selectedUser.myStations.map((station, index) => (
-                        <div key={index} className="station-item">
-                          <span>{typeof station === 'object' && station && station.name ? station.name : (station || '정류장 정보 없음')}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p>등록된 즐겨찾기 정류장이 없습니다.</p>
-                  )}
+                  {renderMyStations(selectedUser.myStations)}
                 </div>
               </div>
             </div>

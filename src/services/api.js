@@ -759,6 +759,36 @@ static convertRideHistory(serverData) {
     date: ride.date || ApiService.formatDate(new Date())
   }));
 }
+
+// ==================== 조직 관련 메서드 ====================
+/**
+ * 조직 코드로 조직 정보 확인
+ * @param {string} code 조직 코드
+ * @returns {Promise<Object>} 조직 정보
+ */
+static async verifyOrganization(code) {
+  try {
+    const data = await ApiService.apiRequest('organization/verify', 'POST', { code });
+    return data;
+  } catch (error) {
+    console.error('조직 확인 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 로그인한 사용자의 조직 정보 조회
+ * @returns {Promise<Object>} 조직 정보
+ */
+static async getCurrentOrganization() {
+  try {
+    const data = await ApiService.apiRequest('organization/current');
+    return data;
+  } catch (error) {
+    console.error('현재 조직 정보 조회 실패:', error);
+    throw error;
+  }
+}
 }
 
 export default ApiService;
