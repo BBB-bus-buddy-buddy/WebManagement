@@ -438,75 +438,121 @@ static convertToServerFormat(appData, drivers, buses, routes) {
 }
 // api.js에 추가할 버스 관련 메서드
   
-  // ==================== 버스 관련 메서드 ====================
-  /**
-   * 모든 버스 조회
-   * @returns {Promise<Array>} 버스 목록
-   */
-  static async getAllBuses() {
-    const data = await ApiService.apiRequest('bus');
-    return data;
+  // ==================== 버스 관련 메서드 (수정됨) ====================
+
+/**
+ * 모든 버스 조회
+ * @returns {Promise<Array>} 버스 목록
+ */
+static async getAllBuses() {
+  const data = await ApiService.apiRequest('bus');
+  return data;
+}
+
+/**
+ * 특정 버스 조회
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 정보
+ */
+static async getBus(busNumber) {
+  const data = await ApiService.apiRequest(`bus/${busNumber}`);
+  return data;
+}
+
+/**
+ * 버스 좌석 정보 조회
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 좌석 정보
+ */
+static async getBusSeats(busNumber) {
+  const data = await ApiService.apiRequest(`bus/seats/${busNumber}`);
+  return data;
+}
+
+/**
+ * 버스 위치 정보 조회
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 위치 정보
+ */
+static async getBusLocation(busNumber) {
+  const data = await ApiService.apiRequest(`bus/location/${busNumber}`);
+  return data;
+}
+
+/**
+ * 버스 추가 (관리자 권한 필요) - 수정된 버전
+ * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": "45" }
+ * @param {Object} busData 추가할 버스 데이터
+ * @returns {Promise<Object>} 추가된 버스 정보
+ */
+static async addBus(busData) {
+  try {
+    console.log('버스 추가 API 요청 데이터:', busData);
+    
+    // API 스펙에 맞게 데이터 구성
+    const requestData = {
+      busNumber: busData.busNumber,
+      routeId: busData.routeId,
+      totalSeats: busData.totalSeats.toString() // 문자열로 변환
+    };
+    
+    console.log('최종 요청 데이터:', requestData);
+    
+    const response = await ApiService.apiRequest('bus', 'POST', requestData);
+    console.log('버스 추가 응답:', response);
+    
+    return response;
+  } catch (error) {
+    console.error('버스 추가 중 오류:', error);
+    throw error;
   }
-  
-  /**
-   * 특정 버스 조회
-   * @param {string} busNumber 조회할 버스 번호
-   * @returns {Promise<Object>} 버스 정보
-   */
-  static async getBus(busNumber) {
-    const data = await ApiService.apiRequest(`bus/${busNumber}`);
-    return data;
+}
+
+/**
+ * 버스 수정 - 수정된 버전
+ * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": 45 }
+ * @param {Object} busData 수정할 버스 데이터
+ * @returns {Promise<Object>} 수정된 버스 정보
+ */
+static async updateBus(busData) {
+  try {
+    console.log('버스 수정 API 요청 데이터:', busData);
+    
+    // API 스펙에 맞게 데이터 구성
+    const requestData = {
+      busNumber: busData.busNumber,
+      routeId: busData.routeId,
+      totalSeats: Number(busData.totalSeats) // 숫자로 변환
+    };
+    
+    console.log('최종 요청 데이터:', requestData);
+    
+    const response = await ApiService.apiRequest('bus', 'PUT', requestData);
+    console.log('버스 수정 응답:', response);
+    
+    return response;
+  } catch (error) {
+    console.error('버스 수정 중 오류:', error);
+    throw error;
   }
-  
-  /**
-   * 버스 좌석 정보 조회
-   * @param {string} busNumber 조회할 버스 번호
-   * @returns {Promise<Object>} 버스 좌석 정보
-   */
-  static async getBusSeats(busNumber) {
-    const data = await ApiService.apiRequest(`bus/seats/${busNumber}`);
-    return data;
+}
+
+/**
+ * 버스 삭제
+ * @param {string} busNumber 삭제할 버스 번호
+ * @returns {Promise<Object>} 삭제 결과
+ */
+static async deleteBus(busNumber) {
+  try {
+    console.log('버스 삭제 요청:', busNumber);
+    const response = await ApiService.apiRequest(`bus/${busNumber}`, 'DELETE');
+    console.log('버스 삭제 응답:', response);
+    return response;
+  } catch (error) {
+    console.error('버스 삭제 중 오류:', error);
+    throw error;
   }
-  
-  /**
-   * 버스 위치 정보 조회
-   * @param {string} busNumber 조회할 버스 번호
-   * @returns {Promise<Object>} 버스 위치 정보
-   */
-  static async getBusLocation(busNumber) {
-    const data = await ApiService.apiRequest(`bus/location/${busNumber}`);
-    return data;
-  }
-  
-  /**
-   * 버스 추가 (관리자 권한 필요)
-   * @param {Object} busData 추가할 버스 데이터
-   * @returns {Promise<Object>} 추가된 버스 정보
-   */
-  static async addBus(busData) {
-    const data = await ApiService.apiRequest('bus', 'POST', busData);
-    return data;
-  }
-  
-  /**
-   * 버스 수정
-   * @param {Object} busData 수정할 버스 데이터
-   * @returns {Promise<Object>} 수정된 버스 정보
-   */
-  static async updateBus(busData) {
-    const data = await ApiService.apiRequest('bus', 'PUT', busData);
-    return data;
-  }
-  
-  /**
-   * 버스 삭제
-   * @param {string} busNumber 삭제할 버스 번호
-   * @returns {Promise<Object>} 삭제 결과
-   */
-  static async deleteBus(busNumber) {
-    const data = await ApiService.apiRequest(`bus/${busNumber}`, 'DELETE');
-    return data;
-  }
+}
   // ==================== 노선 관련 메서드 ====================
   /**
    * 모든 노선 조회
@@ -758,6 +804,185 @@ static convertRideHistory(serverData) {
     alightingTime: ride.alightingTime || '00:00',
     date: ride.date || ApiService.formatDate(new Date())
   }));
+}
+
+// ==================== 조직 관련 메서드 ====================
+/**
+ * 조직 코드로 조직 정보 확인
+ * @param {string} code 조직 코드
+ * @returns {Promise<Object>} 조직 정보
+ */
+static async verifyOrganization(code) {
+  try {
+    const data = await ApiService.apiRequest('organization/verify', 'POST', { code });
+    return data;
+  } catch (error) {
+    console.error('조직 확인 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 로그인한 사용자의 조직 정보 조회
+ * @returns {Promise<Object>} 조직 정보
+ */
+static async getCurrentOrganization() {
+  try {
+    const data = await ApiService.apiRequest('organization/current');
+    return data;
+  } catch (error) {
+    console.error('현재 조직 정보 조회 실패:', error);
+    throw error;
+  }
+}
+
+// services/api.js에 추가할 현재 사용자 및 조직별 필터링 메서드
+
+// ==================== 현재 사용자 정보 관련 메서드 ====================
+/**
+ * 현재 로그인한 사용자 정보 조회
+ * @returns {Promise<Object>} 사용자 정보
+ */
+static async getCurrentUser() {
+  try {
+    const data = await ApiService.apiRequest('auth/me');
+    return data;
+  } catch (error) {
+    console.error('현재 사용자 정보 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 토큰에서 사용자 정보 추출
+ * @returns {Object|null} 디코딩된 사용자 정보
+ */
+static getCurrentUserFromToken() {
+  try {
+    const token = ApiService.getToken();
+    if (!token) return null;
+    
+    // JWT 토큰 디코딩 (간단한 방법, 보안 검증은 서버에서)
+    const payload = token.split('.')[1];
+    const decodedPayload = atob(payload);
+    return JSON.parse(decodedPayload);
+  } catch (error) {
+    console.error('토큰 디코딩 실패:', error);
+    return null;
+  }
+}
+
+// ==================== 조직별 필터링된 데이터 조회 메서드 ====================
+/**
+ * 현재 조직의 이용자만 조회
+ * @returns {Promise<Object>} 조직 이용자 목록
+ */
+static async getOrganizationUsers() {
+  try {
+    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
+    const response = await ApiService.apiRequest('user?role=USER');
+    
+    // 응답에서 사용자 목록 추출
+    const userList = ApiService.extractUserList(response);
+    console.log('조직 사용자 목록:', userList);
+    
+    // USER 역할만 필터링
+    const userRoleOnly = userList.filter(user => user && user.role === 'USER');
+    
+    return {
+      data: userRoleOnly,
+      message: response.message || '조직 이용자 목록을 가져왔습니다.'
+    };
+  } catch (error) {
+    console.error('조직 이용자 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 조직의 버스만 조회
+ * @returns {Promise<Array>} 조직 버스 목록
+ */
+static async getOrganizationBuses() {
+  try {
+    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
+    const data = await ApiService.apiRequest('bus');
+    return data;
+  } catch (error) {
+    console.error('조직 버스 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 조직의 정류장만 조회
+ * @returns {Promise<Array>} 조직 정류장 목록
+ */
+static async getOrganizationStations() {
+  try {
+    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
+    const data = await ApiService.apiRequest('station');
+    return data;
+  } catch (error) {
+    console.error('조직 정류장 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 조직의 노선만 조회
+ * @returns {Promise<Array>} 조직 노선 목록
+ */
+static async getOrganizationRoutes() {
+  try {
+    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
+    const data = await ApiService.apiRequest('routes');
+    return data;
+  } catch (error) {
+    console.error('조직 노선 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 조직의 버스 기사 배치표만 조회
+ * @returns {Promise<Array>} 조직 배치표 목록
+ */
+static async getOrganizationOperationPlans() {
+  try {
+    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
+    const data = await ApiService.apiRequest('operationplan');
+    return data;
+  } catch (error) {
+    console.error('조직 배치표 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 현재 조직의 버스 기사만 조회
+ * @returns {Promise<Array>} 조직 버스 기사 목록
+ */
+static async getOrganizationDrivers() {
+  try {
+    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
+    const response = await ApiService.apiRequest('user?role=DRIVER');
+    
+    // 응답에서 사용자 목록 추출
+    const userList = ApiService.extractUserList(response);
+    console.log('조직 기사 목록:', userList);
+    
+    // DRIVER 역할만 필터링
+    const driverRoleOnly = userList.filter(user => user && user.role === 'DRIVER');
+    
+    return {
+      data: driverRoleOnly,
+      message: response.message || '조직 버스 기사 목록을 가져왔습니다.'
+    };
+  } catch (error) {
+    console.error('조직 버스 기사 조회 실패:', error);
+    throw error;
+  }
 }
 }
 
