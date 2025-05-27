@@ -800,7 +800,7 @@ function RouteManagement() {
       setShowAddForm(false);
       setShowMap(false);
       setNewRoute({
-        routeName: '',
+        newRouteName: '',
         stations: []
       });
       
@@ -824,10 +824,11 @@ function RouteManagement() {
       return;
     }
     
+    
     try {
       const routeData = {
-        id: editRoute.id,
-        routeName: editRoute.routeName,
+        prevRouteName: selectedRoute.routeName,
+        newRouteName: editRoute.routeName,
         stations: editRoute.stations.map(station => ({
           sequence: station.sequence,
           stationId: station.stationId
