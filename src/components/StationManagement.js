@@ -1,4 +1,4 @@
-// components/StationManagement.js
+// components/StationManagement.js - 조직별 필터링 적용
 import React, { useState, useEffect, useRef } from 'react';
 import ApiService from '../services/api';
 import '../styles/StationManagement.css';
@@ -25,25 +25,68 @@ function StationManagement() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [organizationName, setOrganizationName] = useState('');
   const [newStation, setNewStation] = useState({
     name: '',
     location: {
       type: 'Point',
       coordinates: [35.5665, 129.3780] // Default to Ulsan center (위도, 경도 순서로 통일)
-    },
-    organizationId: 'Uasidnw' // Default organizationId from your data
+    }
   });
   const [editStation, setEditStation] = useState(null);
 
-  // Fetch all stations on component mount
+  // Fetch all organization stations on component mount
   useEffect(() => {
+    fetchCurrentUser();
     fetchStations();
     loadKakaoMapScript();
   }, []);
 
+  // 현재 로그인한 사용자 정보 가져오기
+  const fetchCurrentUser = async () => {
+    try {
+      const userFromToken = ApiService.getCurrentUserFromToken();
+      if (userFromToken) {
+        setCurrentUser(userFromToken);
+        
+        if (userFromToken.organizationId) {
+          fetchOrganizationName(userFromToken.organizationId);
+        }
+      }
+      
+      const userFromServer = await ApiService.getCurrentUser();
+      if (userFromServer && userFromServer.data) {
+        setCurrentUser(userFromServer.data);
+        
+        if (userFromServer.data.organizationId) {
+          fetchOrganizationName(userFromServer.data.organizationId);
+        }
+      }
+    } catch (error) {
+      console.error('현재 사용자 정보 가져오기 실패:', error);
+      const userFromToken = ApiService.getCurrentUserFromToken();
+      if (userFromToken) {
+        setCurrentUser(userFromToken);
+      }
+    }
+  };
+
+  // 조직명 가져오기
+  const fetchOrganizationName = async (orgId) => {
+    try {
+      const response = await ApiService.verifyOrganization(orgId);
+      if (response && response.data && response.data.name) {
+        setOrganizationName(response.data.name);
+      }
+    } catch (error) {
+      console.error('조직명 조회 실패:', error);
+      setOrganizationName(orgId);
+    }
+  };
+
   // Load Kakao Maps API
   const loadKakaoMapScript = () => {
-    // 이미 스크립트가 로드되었는지 확인
     if (window.kakao && window.kakao.maps) {
       console.log("카카오맵 스크립트가 이미 로드되어 있습니다.");
       setMapLoaded(true);
@@ -91,22 +134,26 @@ function StationManagement() {
     }
   }, [selectedStation, showAddForm, showEditForm, mapLoaded]);
 
+  // 현재 조직의 정류장만 가져오기
   const fetchStations = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await ApiService.apiRequest('station');
-      console.log('API 응답 데이터:', response);
+      // 조직별 필터링된 정류장 조회 메서드 사용
+      const response = await ApiService.getOrganizationStations();
+      console.log('조직 정류장 API 응답 데이터:', response);
       
       // 응답 구조에 맞게 수정
       if (response && Array.isArray(response.data)) {
         setStations(response.data);
+      } else if (response && response.data) {
+        setStations(Array.isArray(response.data) ? response.data : [response.data]);
       } else {
         console.error('응답 데이터 형식이 예상과 다릅니다:', response);
         setStations([]);
       }
     } catch (err) {
-      console.error('Error fetching stations:', err);
+      console.error('조직 정류장 정보 불러오기 실패:', err);
       setError('정류장 정보를 불러오는데 실패했습니다.');
       setStations([]);
     } finally {
@@ -114,7 +161,7 @@ function StationManagement() {
     }
   };
 
-  // Search stations by name
+  // Search organization stations by name
   const searchStationsByName = async (name) => {
     if (!name.trim()) {
       fetchStations();
@@ -124,10 +171,18 @@ function StationManagement() {
     setLoading(true);
     setError(null);
     try {
-      const response = await ApiService.apiRequest(`station?name=${name}`);
-      setStations(response.data);
+      // 조직별 필터링된 정류장 검색 (서버에서 조직 필터링됨)
+      const response = await ApiService.searchStationsByName(name);
+      
+      if (response && Array.isArray(response.data)) {
+        setStations(response.data);
+      } else if (response && response.data) {
+        setStations(Array.isArray(response.data) ? response.data : [response.data]);
+      } else {
+        setStations([]);
+      }
     } catch (err) {
-      console.error('Error searching stations:', err);
+      console.error('조직 정류장 검색 실패:', err);
       setError('정류장 검색에 실패했습니다.');
     } finally {
       setLoading(false);
@@ -151,7 +206,6 @@ function StationManagement() {
     const container = mapContainerRef.current;
     
     try {
-      // 좌표가 유효한지 확인
       const lat = selectedStation.location.coordinates[0];
       const lng = selectedStation.location.coordinates[1];
       console.log("상세 지도 좌표:", { lat, lng });
@@ -161,22 +215,18 @@ function StationManagement() {
         return;
       }
 
-      // 지도 옵션 설정
       const options = {
         center: new window.kakao.maps.LatLng(lat, lng),
         level: 3
       };
 
-      // 지도 생성
       const map = new window.kakao.maps.Map(container, options);
       mapInstanceRef.current = map;
 
-      // 이전 마커 제거
       if (detailMarkerRef.current) {
         detailMarkerRef.current.setMap(null);
       }
 
-      // 새 마커 생성
       const markerPosition = new window.kakao.maps.LatLng(lat, lng);
       const marker = new window.kakao.maps.Marker({
         position: markerPosition
@@ -206,7 +256,6 @@ function StationManagement() {
     const container = addMapContainerRef.current;
 
     try {
-      // 좌표가 유효한지 확인
       const lat = newStation.location.coordinates[0];
       const lng = newStation.location.coordinates[1];
       console.log("등록 지도 좌표:", { lat, lng });
@@ -216,21 +265,17 @@ function StationManagement() {
         return;
       }
 
-      // 지도 옵션 설정
       const options = {
         center: new window.kakao.maps.LatLng(lat, lng),
         level: 3
       };
 
-      // 지도 생성
       const map = new window.kakao.maps.Map(container, options);
 
-      // 이전 마커 제거
       if (addMarkerRef.current) {
         addMarkerRef.current.setMap(null);
       }
 
-      // 새 마커 생성
       const markerPosition = new window.kakao.maps.LatLng(lat, lng);
       const marker = new window.kakao.maps.Marker({
         position: markerPosition
@@ -238,7 +283,6 @@ function StationManagement() {
       marker.setMap(map);
       addMarkerRef.current = marker;
 
-      // 클릭 이벤트 등록
       window.kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
         const latlng = mouseEvent.latLng;
         marker.setPosition(latlng);
@@ -247,7 +291,7 @@ function StationManagement() {
           ...newStation,
           location: {
             type: 'Point',
-            coordinates: [latlng.getLat(), latlng.getLng()] // 위도, 경도 순서로 통일
+            coordinates: [latlng.getLat(), latlng.getLng()]
           }
         });
       });
@@ -275,7 +319,6 @@ function StationManagement() {
     const container = editMapContainerRef.current;
 
     try {
-      // 좌표가 유효한지 확인
       const lat = editStation.location.coordinates[0];
       const lng = editStation.location.coordinates[1];
       console.log("수정 지도 좌표:", { lat, lng });
@@ -285,21 +328,17 @@ function StationManagement() {
         return;
       }
 
-      // 지도 옵션 설정
       const options = {
         center: new window.kakao.maps.LatLng(lat, lng),
         level: 3
       };
 
-      // 지도 생성
       const map = new window.kakao.maps.Map(container, options);
 
-      // 이전 마커 제거
       if (editMarkerRef.current) {
         editMarkerRef.current.setMap(null);
       }
 
-      // 새 마커 생성
       const markerPosition = new window.kakao.maps.LatLng(lat, lng);
       const marker = new window.kakao.maps.Marker({
         position: markerPosition
@@ -307,7 +346,6 @@ function StationManagement() {
       marker.setMap(map);
       editMarkerRef.current = marker;
 
-      // 클릭 이벤트 등록
       window.kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
         const latlng = mouseEvent.latLng;
         marker.setPosition(latlng);
@@ -316,7 +354,7 @@ function StationManagement() {
           ...editStation,
           location: {
             type: 'Point',
-            coordinates: [latlng.getLat(), latlng.getLng()] // 위도, 경도 순서로 통일
+            coordinates: [latlng.getLat(), latlng.getLng()]
           }
         });
       });
@@ -344,16 +382,14 @@ function StationManagement() {
     setShowEditForm(false);
     
     // 울산 중심 좌표: 위도 35.5665, 경도 129.3780
-    // 내부적으로 [위도, 경도] 형식 유지
     setNewStation({
       name: '',
       location: {
         type: 'Point',
-        coordinates: [35.5665, 129.3780] // [위도, 경도] 형식으로 유지
+        coordinates: [35.5665, 129.3780]
       }
     });
     
-    // 지도 초기화를 위한 지연
     setTimeout(() => {
       if (mapLoaded && addMapContainerRef.current) {
         initAddMap();
@@ -364,13 +400,14 @@ function StationManagement() {
   const handleDeleteStation = async (id) => {
     if (window.confirm('정말로 이 정류장을 삭제하시겠습니까?')) {
       try {
-        await ApiService.apiRequest(`station/${id}`, 'DELETE');
+        await ApiService.deleteStation(id);
         setStations(stations.filter(station => station.id !== id));
         if (selectedStation && selectedStation.id === id) {
           setSelectedStation(null);
         }
+        alert('정류장이 삭제되었습니다.');
       } catch (err) {
-        console.error('Error deleting station:', err);
+        console.error('조직 정류장 삭제 실패:', err);
         alert('정류장 삭제에 실패했습니다.');
       }
     }
@@ -392,7 +429,7 @@ function StationManagement() {
     });
   };
 
-  // 정류장 등록 함수 (POST)
+  // 조직 정류장 등록 함수 (POST)
   const handleAddStation = async (e) => {
     e.preventDefault();
     
@@ -400,235 +437,97 @@ function StationManagement() {
       setLoading(true);
       setError(null);
       
-      // 수정 함수에서 사용한 것과 동일한 형식으로 변경
-      // 1. 서버 엔티티 필드만 포함 (name, location)
-      // 2. location은 배열로 직접 전달
+      // 서버에 정류장 추가 (조직 정보는 서버에서 토큰으로 자동 처리)
       const requestData = {
         name: newStation.name,
-        // 좌표는 [경도, 위도] 배열로 직접 전달
         location: newStation.location.coordinates[0] > 90 ?
-          // 이미 [경도, 위도] 형식이면 그대로 사용
           newStation.location.coordinates :
-          // [위도, 경도] 형식이면 순서 변경
           [newStation.location.coordinates[1], newStation.location.coordinates[0]]
       };
       
-      console.log('정류장 등록 요청 데이터 (수정된 형식):', requestData);
+      console.log('조직 정류장 등록 요청 데이터:', requestData);
       
-      const response = await ApiService.apiRequest('station', 'POST', requestData);
+      const response = await ApiService.addStation({
+        name: newStation.name,
+        location: {
+          type: 'Point',
+          coordinates: requestData.location
+        }
+      });
       
       console.log('서버 응답:', response);
       if (response && response.data) {
-        setStations([...stations, response.data]);
+        await fetchStations(); // 조직 정류장 목록 새로고침
         setShowAddForm(false);
+        alert('정류장이 등록되었습니다.');
       }
     } catch (err) {
-      console.error('Error adding station:', err);
-      
-      // 첫 번째 방식이 실패하면 두 번째 방식 시도
-      try {
-        // 두 번째 방식: GeoJSON Point 객체 형식
-        const requestData2 = {
-          name: newStation.name,
-          location: {
-            type: 'Point',
-            coordinates: newStation.location.coordinates[0] > 90 ?
-              newStation.location.coordinates :
-              [newStation.location.coordinates[1], newStation.location.coordinates[0]]
-          }
-        };
-        
-        console.log('정류장 등록 요청 데이터 (방식 2):', requestData2);
-        
-        const response = await ApiService.apiRequest('station', 'POST', requestData2);
-        
-        console.log('서버 응답 (방식 2):', response);
-        if (response && response.data) {
-          setStations([...stations, response.data]);
-          setShowAddForm(false);
-          return;
-        }
-      } catch (err2) {
-        console.error('Error adding station (방식 2):', err2);
-        
-        // 세 번째 방식 시도: 좌표 필드 직접 사용
-        try {
-          const latitude = newStation.location.coordinates[0] > 90 ? 
-            newStation.location.coordinates[1] : 
-            newStation.location.coordinates[0];
-          
-          const longitude = newStation.location.coordinates[0] > 90 ? 
-            newStation.location.coordinates[0] : 
-            newStation.location.coordinates[1];
-          
-          const requestData3 = {
-            name: newStation.name,
-            latitude: latitude,
-            longitude: longitude
-          };
-          
-          console.log('정류장 등록 요청 데이터 (방식 3):', requestData3);
-          
-          const response = await ApiService.apiRequest('station', 'POST', requestData3);
-          
-          console.log('서버 응답 (방식 3):', response);
-          if (response && response.data) {
-            setStations([...stations, response.data]);
-            setShowAddForm(false);
-            return;
-          }
-        } catch (err3) {
-          console.error('Error adding station (방식 3):', err3);
-          setError(`정류장 등록에 실패했습니다. 모든 방법 시도 실패: ${err3.message || '알 수 없는 오류'}`);
-        }
-      }
+      console.error('조직 정류장 등록 실패:', err);
+      setError(`정류장 등록에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
     } finally {
       setLoading(false);
     }
   };
-
 
   const handleEditStationClick = () => {
     setShowEditForm(true);
     setEditStation({...selectedStation});
   };
 
-  // 정류장 수정 함수 - 서버 API에 맞게 데이터 형식 수정
-const handleUpdateStation = async (e) => {
-  e.preventDefault();
-  
-  try {
-    setLoading(true);
-    setError(null);
+  // 조직 정류장 수정 함수
+  const handleUpdateStation = async (e) => {
+    e.preventDefault();
     
-    // 요청 데이터 준비
-    // 1. 서버 엔티티 필드만 포함 (ID, name, location)
-    // 2. 좌표는 서버가 기대하는 형식으로 변환
-    const requestData = {
-      id: editStation.id, // ID 필드 포함
-      name: editStation.name,
-      // GeoJsonPoint 생성자는 (경도, 위도) 순서로 값을 받음
-      // 그러나 JSON 요청에서는 (경도, 위도) 배열만 전달
-      location: editStation.location.coordinates[0] > 90 ?
-        // 이미 [경도, 위도] 형식이면 그대로 사용
-        editStation.location.coordinates :
-        // [위도, 경도] 형식이면 순서 변경
-        [editStation.location.coordinates[1], editStation.location.coordinates[0]]
-    };
-    
-    console.log('정류장 수정 요청 데이터 (직접 좌표 방식):', requestData);
-    
-    const response = await ApiService.apiRequest(`station/${editStation.id}`, 'PUT', requestData);
-    
-    console.log('서버 응답:', response);
-    
-    if (response) {
-      // 성공 시 목록 갱신
-      await fetchStations();
-      setShowEditForm(false);
-      
-      // 선택된 정류장 정보 갱신
-      const updatedStations = await ApiService.apiRequest('station');
-      const updatedStation = updatedStations.data.find(s => s.id === editStation.id);
-      
-      if (updatedStation) {
-        setSelectedStation(updatedStation);
-      } else {
-        setSelectedStation(null);
-      }
-    }
-  } catch (err) {
-    console.error('Error updating station:', err);
-    
-    // 첫 번째 방식 실패 시 두 번째 방식 시도
     try {
-      // 두 번째 방식: location 객체 완전히 전달
-      const requestData2 = {
+      setLoading(true);
+      setError(null);
+      
+      const requestData = {
+        id: editStation.id,
         name: editStation.name,
-        // 완전한 GeoJSON Point 객체
-        location: {
-          type: 'Point',
-          coordinates: editStation.location.coordinates[0] > 90 ?
-            // 이미 [경도, 위도] 형식이면 그대로 사용
-            editStation.location.coordinates :
-            // [위도, 경도] 형식이면 순서 변경
-            [editStation.location.coordinates[1], editStation.location.coordinates[0]]
-        }
+        location: editStation.location.coordinates[0] > 90 ?
+          editStation.location.coordinates :
+          [editStation.location.coordinates[1], editStation.location.coordinates[0]]
       };
       
-      console.log('정류장 수정 요청 데이터 (GeoJSON Point 방식):', requestData2);
+      console.log('조직 정류장 수정 요청 데이터:', requestData);
       
-      const response = await ApiService.apiRequest(`station/${editStation.id}`, 'PUT', requestData2);
+      const response = await ApiService.updateStation(editStation.id, {
+        name: editStation.name,
+        location: {
+          type: 'Point',
+          coordinates: requestData.location
+        }
+      });
       
-      console.log('서버 응답 (방식 2):', response);
+      console.log('서버 응답:', response);
       
       if (response) {
-        await fetchStations();
+        await fetchStations(); // 조직 정류장 목록 새로고침
         setShowEditForm(false);
         
-        const updatedStations = await ApiService.apiRequest('station');
-        const updatedStation = updatedStations.data.find(s => s.id === editStation.id);
-        
+        // 수정된 정류장 정보로 선택된 정류장 업데이트
+        const updatedStation = stations.find(s => s.id === editStation.id);
         if (updatedStation) {
           setSelectedStation(updatedStation);
         } else {
           setSelectedStation(null);
         }
+        
+        alert('정류장이 수정되었습니다.');
       }
-    } catch (err2) {
-      console.error('Error updating station (방식 2):', err2);
-      
-      // 세 번째 방식 시도: 좌표 직접 타입 변환
-      try {
-        const latitude = editStation.location.coordinates[0] > 90 ? 
-          editStation.location.coordinates[1] : 
-          editStation.location.coordinates[0];
-        
-        const longitude = editStation.location.coordinates[0] > 90 ? 
-          editStation.location.coordinates[0] : 
-          editStation.location.coordinates[1];
-        
-        // location 객체 완전히 제거, 대신 직접 좌표 필드 추가
-        const requestData3 = {
-          name: editStation.name,
-          latitude: latitude,
-          longitude: longitude
-        };
-        
-        console.log('정류장 수정 요청 데이터 (직접 좌표 필드 방식):', requestData3);
-        
-        const response = await ApiService.apiRequest(`station/${editStation.id}`, 'PUT', requestData3);
-        
-        console.log('서버 응답 (방식 3):', response);
-        
-        if (response) {
-          await fetchStations();
-          setShowEditForm(false);
-          
-          const updatedStations = await ApiService.apiRequest('station');
-          const updatedStation = updatedStations.data.find(s => s.id === editStation.id);
-          
-          if (updatedStation) {
-            setSelectedStation(updatedStation);
-          } else {
-            setSelectedStation(null);
-          }
-        }
-      } catch (err3) {
-        console.error('Error updating station (방식 3):', err3);
-        setError(`정류장 수정에 실패했습니다. 모든 방법 시도 실패: ${err3.message || '알 수 없는 오류'}`);
-      }
+    } catch (err) {
+      console.error('조직 정류장 수정 실패:', err);
+      setError(`정류장 수정에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleSearch = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
     
-    // Debounce search to avoid too many API calls
     if (window.searchTimeout) {
       clearTimeout(window.searchTimeout);
     }
@@ -675,13 +574,14 @@ const handleUpdateStation = async (e) => {
         </div>
         
         <div className="form-actions">
-          <button type="submit" className="save-button">
-            {isEdit ? '저장' : '등록'}
+          <button type="submit" className="save-button" disabled={loading}>
+            {loading ? '처리 중...' : (isEdit ? '저장' : '등록')}
           </button>
           <button 
             type="button" 
             className="cancel-button"
             onClick={() => isEdit ? setShowEditForm(false) : setShowAddForm(false)}
+            disabled={loading}
           >
             취소
           </button>
@@ -692,7 +592,9 @@ const handleUpdateStation = async (e) => {
 
   return (
     <div className="station-management">
-      <h1>정류장 관리</h1>
+      <div className="management-header">
+        <h1>정류장 관리</h1>
+      </div>
       
       {error && <div className="error-message">{error}</div>}
       {!mapLoaded && <div className="loading-message">지도를 로딩 중입니다...</div>}
@@ -700,6 +602,7 @@ const handleUpdateStation = async (e) => {
       <div className="management-container">
         <div className="list-section">
           <div className="list-header">
+            <h2>정류장 목록 ({filteredStations.length}개)</h2>
             <div className="search-bar">
               <input
                 type="text"
@@ -717,7 +620,9 @@ const handleUpdateStation = async (e) => {
             ) : !Array.isArray(filteredStations) ? (
               <div key="format-error" className="empty-list">데이터 형식이 올바르지 않습니다.</div>
             ) : filteredStations.length === 0 ? (
-              <div key="no-results" className="empty-list">검색 결과가 없습니다.</div>
+              <div key="no-results" className="empty-list">
+                {searchQuery ? '검색 결과가 없습니다.' : '등록된 정류장이 없습니다.'}
+              </div>
             ) : (
               filteredStations.map(station => (
                 <div 
@@ -727,6 +632,10 @@ const handleUpdateStation = async (e) => {
                 >
                   <div className="station-info">
                     <h3>{station.name}</h3>
+                    <p className="station-coords">
+                      위도: {station.location?.coordinates[0]?.toFixed(4)}, 
+                      경도: {station.location?.coordinates[1]?.toFixed(4)}
+                    </p>
                   </div>
                   <button 
                     onClick={(e) => {
@@ -763,6 +672,10 @@ const handleUpdateStation = async (e) => {
                     경도 {selectedStation.location.coordinates[1].toFixed(6)}
                   </span>
                 </div>
+                <div className="detail-row">
+                  <label>소속:</label>
+                  <span>{organizationName || selectedStation.organizationId || '정보 없음'}</span>
+                </div>
               </div>
               
               <div className="map-section">
@@ -777,6 +690,7 @@ const handleUpdateStation = async (e) => {
           ) : showAddForm ? (
             <div className="add-station-container">
               <h2>새 정류장 등록</h2>
+              <p className="form-description">새 정류장은 현재 조직({organizationName || '현재 조직'})에 등록됩니다.</p>
               {renderStationForm(false)}
             </div>
           ) : showEditForm ? (

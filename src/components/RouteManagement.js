@@ -1,10 +1,12 @@
-// components/RouteManagement.js
+// components/RouteManagement.js - 코드 순서 정리
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ApiService from '../services/api';
 import '../styles/RouteManagement.css';
+
+// ===================== 드래그 앤 드롭 컴포넌트 =====================
 
 // 드래그 가능한 정류장 아이템 컴포넌트
 const DraggableStationItem = ({ id, index, text, moveStation, removeStation }) => {
@@ -21,27 +23,18 @@ const DraggableStationItem = ({ id, index, text, moveStation, removeStation }) =
   const [, drop] = useDrop({
     accept: 'STATION',
     hover(item, monitor) {
-      if (!ref.current) {
-        return;
-      }
+      if (!ref.current) return;
       
       const dragIndex = item.index;
       const hoverIndex = index;
       
-      // 자기 자신 위에 드롭하는 경우는 무시
-      if (dragIndex === hoverIndex) {
-        return;
-      }
+      if (dragIndex === hoverIndex) return;
       
-      // 순서 변경 함수 호출
       moveStation(dragIndex, hoverIndex);
-      
-      // 드래그 중인 아이템의 인덱스 업데이트
       item.index = hoverIndex;
     },
   });
   
-  // ref에 drag와 drop 기능 적용
   drag(drop(ref));
   
   return (
@@ -96,27 +89,18 @@ const MapDraggableStationItem = ({ id, index, stationNumber, stationName, moveSt
   const [, drop] = useDrop({
     accept: 'MAP_STATION',
     hover(item, monitor) {
-      if (!ref.current) {
-        return;
-      }
+      if (!ref.current) return;
       
       const dragIndex = item.index;
       const hoverIndex = index;
       
-      // 자기 자신 위에 드롭하는 경우는 무시
-      if (dragIndex === hoverIndex) {
-        return;
-      }
+      if (dragIndex === hoverIndex) return;
       
-      // 순서 변경 함수 호출
       moveStation(dragIndex, hoverIndex);
-      
-      // 드래그 중인 아이템의 인덱스 업데이트
       item.index = hoverIndex;
     },
   });
   
-  // ref에 drag와 drop 기능 적용
   drag(drop(ref));
   
   return (
@@ -174,45 +158,102 @@ const MapDraggableStationItem = ({ id, index, stationNumber, stationName, moveSt
   );
 };
 
+// ===================== 메인 컴포넌트 =====================
+
 function RouteManagement() {
   const navigate = useNavigate();
+  
+  // ===================== Refs =====================
   const mapRef = useRef(null);
   const kakaoMapRef = useRef(null);
   const markersRef = useRef([]);
   
-  // 상태 관리
+  // ===================== 상태 관리 =====================
+  // 데이터 상태
   const [stations, setStations] = useState([]);
   const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  
+  // UI 상태
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  const [selectedRoute, setSelectedRoute] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // 폼 데이터 상태
   const [newRoute, setNewRoute] = useState({
     routeName: '',
     stations: []
   });
   const [editRoute, setEditRoute] = useState(null);
   
+  // 사용자 및 조직 상태
+  const [currentUser, setCurrentUser] = useState(null);
+  const [organizationName, setOrganizationName] = useState('');
+  
   // 지도 관련 상태
-  const [showMap, setShowMap] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
+  // ===================== 초기화 및 데이터 가져오기 =====================
+  
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
+    fetchCurrentUser();
     fetchRoutes();
     fetchStations();
   }, []);
 
-  // 노선 데이터 가져오기
+  // 현재 로그인한 사용자 정보 가져오기
+  const fetchCurrentUser = async () => {
+    try {
+      const userFromToken = ApiService.getCurrentUserFromToken();
+      if (userFromToken) {
+        setCurrentUser(userFromToken);
+        
+        if (userFromToken.organizationId) {
+          fetchOrganizationName(userFromToken.organizationId);
+        }
+      }
+      
+      const userFromServer = await ApiService.getCurrentUser();
+      if (userFromServer && userFromServer.data) {
+        setCurrentUser(userFromServer.data);
+        
+        if (userFromServer.data.organizationId) {
+          fetchOrganizationName(userFromServer.data.organizationId);
+        }
+      }
+    } catch (error) {
+      console.error('현재 사용자 정보 가져오기 실패:', error);
+      const userFromToken = ApiService.getCurrentUserFromToken();
+      if (userFromToken) {
+        setCurrentUser(userFromToken);
+      }
+    }
+  };
+
+  // 조직명 가져오기
+  const fetchOrganizationName = async (orgId) => {
+    try {
+      const response = await ApiService.verifyOrganization(orgId);
+      if (response && response.data && response.data.name) {
+        setOrganizationName(response.data.name);
+      }
+    } catch (error) {
+      console.error('조직명 조회 실패:', error);
+      setOrganizationName(orgId);
+    }
+  };
+
+  // 현재 조직의 노선 데이터만 가져오기
   const fetchRoutes = async () => {
     try {
       setIsLoading(true);
-      const response = await ApiService.apiRequest('routes');
-      console.log('노선 데이터 응답:', response);
+      const response = await ApiService.getOrganizationRoutes();
+      console.log('조직 노선 데이터 응답:', response);
       
       if (response && Array.isArray(response.data)) {
         setRoutes(response.data);
@@ -223,7 +264,7 @@ function RouteManagement() {
       }
       setError(null);
     } catch (err) {
-      console.error('노선 데이터 로드 중 오류:', err);
+      console.error('조직 노선 데이터 로드 중 오류:', err);
       setError('노선 데이터를 불러오는 중 오류가 발생했습니다.');
       setRoutes([]);
     } finally {
@@ -231,34 +272,11 @@ function RouteManagement() {
     }
   };
 
-  // 노선 검색 기능
-  const searchRoutesByName = async (name) => {
-    try {
-      setIsLoading(true);
-      const response = await ApiService.apiRequest(`routes?name=${encodeURIComponent(name)}`);
-      
-      if (response && Array.isArray(response.data)) {
-        setRoutes(response.data);
-      } else if (response && response.data) {
-        setRoutes(Array.isArray(response.data) ? response.data : [response.data]);
-      } else {
-        setRoutes([]);
-      }
-      setError(null);
-    } catch (err) {
-      console.error('노선 검색 중 오류:', err);
-      setError('노선 검색 중 오류가 발생했습니다.');
-      setRoutes([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 정류장 데이터 가져오기
+  // 현재 조직의 정류장 데이터만 가져오기
   const fetchStations = async () => {
     try {
-      const response = await ApiService.apiRequest('station');
-      console.log('정류장 데이터 응답:', response);
+      const response = await ApiService.getOrganizationStations();
+      console.log('조직 정류장 데이터 응답:', response);
       
       if (response && Array.isArray(response.data)) {
         setStations(response.data);
@@ -268,7 +286,7 @@ function RouteManagement() {
         setStations([]);
       }
     } catch (err) {
-      console.error('정류장 데이터 로드 중 오류:', err);
+      console.error('조직 정류장 데이터 로드 중 오류:', err);
       setError('정류장 데이터를 불러오는 중 오류가 발생했습니다.');
       setStations([]);
     }
@@ -278,14 +296,12 @@ function RouteManagement() {
   const fetchRouteDetail = async (routeId) => {
     try {
       setIsLoading(true);
-      const response = await ApiService.apiRequest(`routes/${routeId}`);
+      const response = await ApiService.getRoute(routeId);
       console.log('노선 상세 정보 응답:', response);
       
       if (response) {
-        // 응답이 바로 데이터인 경우와 data 속성에 들어있는 경우 모두 처리
         const routeData = response.data ? response.data : response;
         
-        // stations 배열이 없거나 비어있는 경우 빈 배열로 설정
         if (!routeData.stations) {
           routeData.stations = [];
         }
@@ -302,6 +318,51 @@ function RouteManagement() {
     }
   };
 
+  // ===================== 검색 기능 =====================
+  
+  // 조직별 노선 검색 기능
+  const searchRoutesByName = async (name) => {
+    try {
+      setIsLoading(true);
+      const response = await ApiService.searchRoutesByName(name);
+      
+      if (response && Array.isArray(response.data)) {
+        setRoutes(response.data);
+      } else if (response && response.data) {
+        setRoutes(Array.isArray(response.data) ? response.data : [response.data]);
+      } else {
+        setRoutes([]);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('조직 노선 검색 중 오류:', err);
+      setError('노선 검색 중 오류가 발생했습니다.');
+      setRoutes([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 노선 검색 (debounce 적용)
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    if (window.searchTimeout) {
+      clearTimeout(window.searchTimeout);
+    }
+    
+    window.searchTimeout = setTimeout(() => {
+      if (value) {
+        searchRoutesByName(value);
+      } else {
+        fetchRoutes();
+      }
+    }, 300);
+  };
+
+  // ===================== 카카오맵 관련 함수 =====================
+  
   // 카카오맵 API 스크립트 로드
   useEffect(() => {
     const loadKakaoMap = () => {
@@ -326,31 +387,22 @@ function RouteManagement() {
     };
     
     loadKakaoMap();
-    
-    return () => {
-      // 필요한 경우 정리 로직 추가
-    };
   }, []);
 
-  // 지도 모달 열기 함수 수정
+  // 지도 모달 열기 함수
   const handleOpenMap = () => {
     setShowMap(true);
     
-    // 모달이 열린 후 약간의 지연을 두고 지도 초기화 트리거
     setTimeout(() => {
-      // 지도가 이미 초기화되었는지 확인
       if (mapInitialized && kakaoMapRef.current) {
         console.log('지도가 이미 초기화됨 - 재로드');
         
-        // 지도 객체를 완전히 새로 생성
         if (mapRef.current) {
-          // 기존 지도 및 마커 제거
           if (markersRef.current.length > 0) {
             markersRef.current.forEach(marker => marker.setMap(null));
             markersRef.current = [];
           }
           
-          // 새로운 지도 객체 생성
           const mapOptions = {
             center: new window.kakao.maps.LatLng(35.5525, 129.2878),
             level: 7
@@ -359,11 +411,8 @@ function RouteManagement() {
           const map = new window.kakao.maps.Map(mapRef.current, mapOptions);
           kakaoMapRef.current = map;
           
-          // 마커 다시 생성
           setTimeout(() => {
             addStationMarkers(map);
-            
-            // 지도 레이아웃 재조정
             map.relayout();
           }, 300);
         }
@@ -371,12 +420,11 @@ function RouteManagement() {
         console.log('지도 새로 초기화');
         initializeMap();
       }
-    }, 500); // 지연 시간 증가
+    }, 500);
   };
 
   const handleCloseMap = () => {
     setShowMap(false);
-    // 지도를 닫을 때 지도 객체 자체는 유지 (재사용 목적)
   };
 
   // 지도 초기화 함수 
@@ -393,20 +441,17 @@ function RouteManagement() {
     }
     
     try {
-      // 지도 컨테이너 확인
       const mapContainer = document.getElementById('kakao-map-container');
       if (!mapContainer) {
         console.error('지도 컨테이너를 찾을 수 없습니다.');
         return;
       }
       
-      // 울산광역시 중심 좌표
       const mapOptions = {
         center: new window.kakao.maps.LatLng(35.5525, 129.2878),
         level: 7
       };
       
-      // 기존 지도 객체가 있는 경우 마커 제거
       if (kakaoMapRef.current) {
         console.log('기존 지도 객체 정리');
         if (markersRef.current.length > 0) {
@@ -416,21 +461,17 @@ function RouteManagement() {
       }
       
       console.log('새 지도 객체 생성');
-      // 새 지도 객체 생성
       const map = new window.kakao.maps.Map(mapRef.current, mapOptions);
       kakaoMapRef.current = map;
       
-      // 지도 로드 완료 이벤트
       window.kakao.maps.event.addListener(map, 'tilesloaded', function() {
         console.log('지도 타일 로드 완료');
       });
       
-      // 정류장 마커 추가
       setTimeout(() => {
         addStationMarkers(map);
       }, 300);
       
-      // 지도 생성 후 크기 재설정
       setTimeout(() => {
         if (map && typeof map.relayout === 'function') {
           console.log('지도 크기 재조정');
@@ -438,7 +479,6 @@ function RouteManagement() {
         }
       }, 500);
       
-      // 초기화 완료 표시
       setMapInitialized(true);
       
     } catch (error) {
@@ -446,64 +486,55 @@ function RouteManagement() {
     }
   };
 
-  // 정류장 마커 추가 함수
+  // 정류장 마커 추가 함수 (조직 정류장만)
   const addStationMarkers = (map) => {
-    console.log('정류장 마커 추가 함수 실행', {
+    console.log('조직 정류장 마커 추가 함수 실행', {
       mapExists: !!map,
       stationsCount: stations?.length || 0
     });
 
-    // 기존 마커 제거
     if (markersRef.current.length > 0) {
       markersRef.current.forEach(marker => marker.setMap(null));
       markersRef.current = [];
     }
     
-    // 정류장 데이터가 없으면 종료
     if (!stations || stations.length === 0) {
-      console.log('표시할 정류장 데이터가 없습니다.');
+      console.log('표시할 조직 정류장 데이터가 없습니다.');
       return;
     }
     
-    // 선택된 정류장 ID 목록 추출
     const selectedIds = showAddForm && newRoute && newRoute.stations
       ? newRoute.stations.map(s => s.stationId)
       : showEditForm && editRoute && editRoute.stations
         ? editRoute.stations.map(s => s.stationId)
         : [];
     
-    // 새 마커 생성
     stations.forEach((station, index) => {
       try {
-        // 정류장 좌표 검증 및 처리
         if (!station.location || !Array.isArray(station.location.coordinates) || station.location.coordinates.length < 2) {
-          console.warn(`정류장 #${index} 좌표 정보 없음:`, station);
+          console.warn(`조직 정류장 #${index} 좌표 정보 없음:`, station);
           return;
         }
         
-        // 유효한 좌표인지 검증
         const lat = parseFloat(station.location.coordinates[0]);
         const lng = parseFloat(station.location.coordinates[1]);
         
         if (isNaN(lat) || isNaN(lng)) {
-          console.warn(`정류장 ${station.name || index}의 좌표가 유효하지 않음:`, station.location.coordinates);
+          console.warn(`조직 정류장 ${station.name || index}의 좌표가 유효하지 않음:`, station.location.coordinates);
           return;
         }
         
-        // 좌표 범위 확인 (유효한 위도/경도 범위인지)
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-          console.warn(`정류장 ${station.name || index}의 좌표가 범위를 벗어남:`, lat, lng);
+          console.warn(`조직 정류장 ${station.name || index}의 좌표가 범위를 벗어남:`, lat, lng);
           return;
         }
         
         const position = new window.kakao.maps.LatLng(lat, lng);
         
-        // 마커 이미지 설정
         let markerImage = null;
         const isSelected = selectedIds.includes(station.id);
         
         if (isSelected) {
-          // 이미 선택된 정류장은 별 모양으로 표시
           markerImage = new window.kakao.maps.MarkerImage(
             '//t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
             new window.kakao.maps.Size(24, 35)
@@ -516,12 +547,10 @@ function RouteManagement() {
           image: markerImage
         });
         
-        // 마커 클릭 이벤트
         window.kakao.maps.event.addListener(marker, 'click', () => {
           handleStationSelectFromMap(station.id);
         });
         
-        // 마커 정보 표시
         const infowindow = new window.kakao.maps.InfoWindow({
           content: `<div style="padding:5px;width:150px;text-align:center;">${station.name || '정류장'}</div>`
         });
@@ -536,21 +565,20 @@ function RouteManagement() {
         
         markersRef.current.push(marker);
       } catch (error) {
-        console.error(`정류장 마커 생성 중 오류:`, error, station);
+        console.error(`조직 정류장 마커 생성 중 오류:`, error, station);
       }
     });
     
-    console.log('생성된 마커 수:', markersRef.current.length);
+    console.log('생성된 조직 정류장 마커 수:', markersRef.current.length);
   };
 
-  // 선택된 정류장 하이라이트 - 개선된 버전
+  // 선택된 정류장 하이라이트
   const highlightSelectedStations = () => {
     if (!kakaoMapRef.current || !markersRef.current || !markersRef.current.length || !window.kakao || !window.kakao.maps) {
       console.log('마커 하이라이트를 위한 조건이 충족되지 않음');
       return;
     }
     
-    // 현재 선택된 정류장 목록 확인 (현재 상태에서 직접 가져옴)
     const selectedIds = [];
     
     if (showAddForm && newRoute && Array.isArray(newRoute.stations)) {
@@ -568,10 +596,8 @@ function RouteManagement() {
     }
     
     console.log('하이라이트 업데이트 - 선택된 정류장 수:', selectedIds.length);
-    console.log('선택된 정류장 ID 목록:', selectedIds);
     
     try {
-      // 각 마커 업데이트
       markersRef.current.forEach((marker, index) => {
         if (index >= stations.length) {
           return;
@@ -585,16 +611,13 @@ function RouteManagement() {
         const stationId = station.id;
         const isSelected = selectedIds.includes(stationId);
         
-        // 선택된 정류장의 마커 이미지 변경
         if (isSelected) {
-          // 선택된 정류장은 별 모양으로 표시
           const selectedMarkerImage = new window.kakao.maps.MarkerImage(
             '//t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
             new window.kakao.maps.Size(24, 35)
           );
           marker.setImage(selectedMarkerImage);
         } else {
-          // 선택되지 않은 정류장은 기본 마커로 표시
           marker.setImage(null);
         }
       });
@@ -603,58 +626,45 @@ function RouteManagement() {
     }
   };
 
-  // 지도에서 정류장 선택 시 처리 - 완전히 새로운 구현
+  // ===================== 이벤트 핸들러 =====================
+
+  // 지도에서 정류장 선택 시 처리
   const handleStationSelectFromMap = (stationId) => {
-    console.log('정류장 선택 시도:', stationId);
+    console.log('조직 정류장 선택 시도:', stationId);
     
-    // 안전하게 함수형 업데이트 사용
     if (showAddForm) {
-      // 함수형 업데이트로 이전 상태를 기반으로 새 상태 생성
       setNewRoute(prevRoute => {
-        // 기존 stations 배열이 없으면 빈 배열로 초기화
         const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
         
-        // 이미 추가된 정류장인지 확인
         if (existingStations.some(s => s.stationId === stationId)) {
           alert('이미 추가된 정류장입니다.');
-          return prevRoute; // 변경 없이 이전 상태 반환
+          return prevRoute;
         }
         
-        // 순서 계산 (현재 선택된 정류장 수 + 1)
         const sequence = existingStations.length + 1;
-        
-        // 새 stations 배열 생성 (기존 + 새 정류장)
         const updatedStations = [...existingStations, { sequence, stationId }];
         
         console.log('추가 모드 - 업데이트된 정류장 목록:', updatedStations);
         
-        // 새 상태 객체 반환
         return {
           ...prevRoute,
           stations: updatedStations
         };
       });
     } else if (showEditForm) {
-      // 함수형 업데이트로 이전 상태를 기반으로 새 상태 생성
       setEditRoute(prevRoute => {
-        // 기존 stations 배열이 없으면 빈 배열로 초기화
         const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
         
-        // 이미 추가된 정류장인지 확인
         if (existingStations.some(s => s.stationId === stationId)) {
           alert('이미 추가된 정류장입니다.');
-          return prevRoute; // 변경 없이 이전 상태 반환
+          return prevRoute;
         }
         
-        // 순서 계산 (현재 선택된 정류장 수 + 1)
         const sequence = existingStations.length + 1;
-        
-        // 새 stations 배열 생성 (기존 + 새 정류장)
         const updatedStations = [...existingStations, { sequence, stationId }];
         
         console.log('편집 모드 - 업데이트된 정류장 목록:', updatedStations);
         
-        // 새 상태 객체 반환
         return {
           ...prevRoute,
           stations: updatedStations
@@ -662,24 +672,9 @@ function RouteManagement() {
       });
     }
     
-    // 상태 업데이트 후 선택된 정류장 하이라이트 업데이트
-    // 상태 업데이트가 완료될 시간을 주기 위해 타이머 사용
     setTimeout(() => {
       highlightSelectedStations();
     }, 300);
-  };
-
-  // 정류장 ID로 정류장 이름 가져오기
-  const getStationName = (stationId) => {
-    if (!stationId) return '정류장 정보 없음';
-    const station = stations.find(s => s.id === stationId);
-    return station ? station.name : '알 수 없는 정류장';
-  };
-
-  // 정류장 객체 가져오기
-  const getStationById = (stationId) => {
-    if (!stationId) return null;
-    return stations.find(s => s.id === stationId);
   };
 
   // 노선 클릭 시 처리
@@ -716,6 +711,23 @@ function RouteManagement() {
     });
   };
 
+  // 노선 수정 버튼 클릭
+  const handleEditRouteClick = () => {
+    if (!selectedRoute) {
+      alert('선택된 노선이 없습니다.');
+      return;
+    }
+    
+    const route = {
+      ...selectedRoute,
+      stations: selectedRoute.stations || []
+    };
+    
+    setShowEditForm(true);
+    setShowMap(false);
+    setEditRoute(route);
+  };
+
   // 노선 삭제
   const handleDeleteRoute = async (id) => {
     if (!id) {
@@ -725,9 +737,8 @@ function RouteManagement() {
     
     if (window.confirm('정말로 이 노선을 삭제하시겠습니까?')) {
       try {
-        await ApiService.apiRequest(`routes/${id}`, 'DELETE');
+        await ApiService.deleteRoute(id);
         
-        // 성공적으로 삭제된 후 노선 목록 새로고침
         fetchRoutes();
         
         if (selectedRoute && selectedRoute.id === id) {
@@ -742,6 +753,8 @@ function RouteManagement() {
     }
   };
 
+  // ===================== 폼 처리 함수 =====================
+
   // 노선명 입력 처리
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -751,118 +764,13 @@ function RouteManagement() {
     });
   };
 
-  // 정류장 제거 함수 - 개선
-  const handleRemoveStation = (index) => {
-    if (showAddForm) {
-      // 함수형 업데이트로 이전 상태를 기반으로 새 상태 생성
-      setNewRoute(prevRoute => {
-        // 기존 stations 배열이 없으면 빈 배열로 초기화
-        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
-        if (existingStations.length === 0) return prevRoute;
-        
-        // 해당 인덱스의 정류장 제거
-        const updatedStations = [...existingStations];
-        updatedStations.splice(index, 1);
-        
-        // 순서 재조정
-        const reorderedStations = updatedStations.map((station, idx) => ({
-          ...station,
-          sequence: idx + 1
-        }));
-        
-        // 새 상태 객체 반환
-        return {
-          ...prevRoute,
-          stations: reorderedStations
-        };
-      });
-    } else if (showEditForm) {
-      // 함수형 업데이트로 이전 상태를 기반으로 새 상태 생성
-      setEditRoute(prevRoute => {
-        // 기존 stations 배열이 없으면 빈 배열로 초기화
-        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
-        if (existingStations.length === 0) return prevRoute;
-        
-        // 해당 인덱스의 정류장 제거
-        const updatedStations = [...existingStations];
-        updatedStations.splice(index, 1);
-        
-        // 순서 재조정
-        const reorderedStations = updatedStations.map((station, idx) => ({
-          ...station,
-          sequence: idx + 1
-        }));
-        
-        // 새 상태 객체 반환
-        return {
-          ...prevRoute,
-          stations: reorderedStations
-        };
-      });
-    }
-    
-    // 상태 업데이트 후 선택된 정류장 하이라이트 업데이트
-    setTimeout(() => {
-      highlightSelectedStations();
-    }, 300);
-  };
-
-  // 정류장 드래그 이동 처리 함수 - 개선
-  const moveStation = (dragIndex, hoverIndex, isEditMode = false) => {
-    if (isEditMode) {
-      // 함수형 업데이트로 이전 상태를 기반으로 새 상태 생성
-      setEditRoute(prevRoute => {
-        // 기존 stations 배열이 없으면 빈 배열로 초기화
-        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
-        if (existingStations.length <= 1) return prevRoute;
-        
-        // 배열 항목 이동
-        const updatedStations = [...existingStations];
-        const [movedItem] = updatedStations.splice(dragIndex, 1);
-        updatedStations.splice(hoverIndex, 0, movedItem);
-        
-        // 순서 재조정
-        const reorderedStations = updatedStations.map((station, idx) => ({
-          ...station,
-          sequence: idx + 1
-        }));
-        
-        // 새 상태 객체 반환
-        return {
-          ...prevRoute,
-          stations: reorderedStations
-        };
-      });
-    } else {
-      // 함수형 업데이트로 이전 상태를 기반으로 새 상태 생성
-      setNewRoute(prevRoute => {
-        // 기존 stations 배열이 없으면 빈 배열로 초기화
-        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
-        if (existingStations.length <= 1) return prevRoute;
-        
-        // 배열 항목 이동
-        const updatedStations = [...existingStations];
-        const [movedItem] = updatedStations.splice(dragIndex, 1);
-        updatedStations.splice(hoverIndex, 0, movedItem);
-        
-        // 순서 재조정
-        const reorderedStations = updatedStations.map((station, idx) => ({
-          ...station,
-          sequence: idx + 1
-        }));
-        
-        // 새 상태 객체 반환
-        return {
-          ...prevRoute,
-          stations: reorderedStations
-        };
-      });
-    }
-    
-    // 상태 업데이트 후 선택된 정류장 하이라이트 업데이트
-    setTimeout(() => {
-      highlightSelectedStations();
-    }, 300);
+  // 노선 수정 폼 입력 처리
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditRoute({
+      ...editRoute,
+      [name]: value
+    });
   };
 
   // 노선 추가 폼 제출
@@ -883,11 +791,10 @@ function RouteManagement() {
         }))
       };
       
-      console.log('노선 등록 요청 데이터:', routeData);
-      const response = await ApiService.apiRequest('routes', 'POST', routeData);
-      console.log('노선 등록 응답:', response);
+      console.log('조직 노선 등록 요청 데이터:', routeData);
+      const response = await ApiService.addRoute(routeData);
+      console.log('조직 노선 등록 응답:', response);
       
-      // 성공적으로 추가된 후 노선 목록 새로고침
       fetchRoutes();
       
       setShowAddForm(false);
@@ -899,41 +806,13 @@ function RouteManagement() {
       
       alert('노선이 등록되었습니다.');
       
-      // 새로 추가된 노선 선택
       if (response && response.id) {
         fetchRouteDetail(response.id);
       }
     } catch (error) {
-      console.error('노선 등록 중 오류:', error);
+      console.error('조직 노선 등록 중 오류:', error);
       alert('노선 등록 중 오류가 발생했습니다.');
     }
-  };
-
-  // 노선 수정 버튼 클릭
-  const handleEditRouteClick = () => {
-    if (!selectedRoute) {
-      alert('선택된 노선이 없습니다.');
-      return;
-    }
-    
-    // stations 배열이 없는 경우 초기화
-    const route = {
-      ...selectedRoute,
-      stations: selectedRoute.stations || []
-    };
-    
-    setShowEditForm(true);
-    setShowMap(false);
-    setEditRoute(route);
-  };
-
-  // 노선 수정 폼 입력 처리
-  const handleEditInputChange = (e) => {
-    const { name, value } = e.target;
-    setEditRoute({
-      ...editRoute,
-      [name]: value
-    });
   };
 
   // 노선 업데이트 폼 제출
@@ -955,13 +834,10 @@ function RouteManagement() {
         }))
       };
       
-      console.log('노선 수정 요청 데이터:', routeData);
-      await ApiService.apiRequest('routes', 'PUT', routeData);
+      console.log('조직 노선 수정 요청 데이터:', routeData);
+      await ApiService.updateRoute(routeData);
       
-      // 성공적으로 수정된 후 노선 목록 새로고침
       fetchRoutes();
-      
-      // 수정된 노선 정보로 선택된 노선 업데이트
       fetchRouteDetail(editRoute.id);
       
       setShowEditForm(false);
@@ -969,9 +845,118 @@ function RouteManagement() {
       
       alert('노선이 수정되었습니다.');
     } catch (error) {
-      console.error('노선 수정 중 오류:', error);
+      console.error('조직 노선 수정 중 오류:', error);
       alert('노선 수정 중 오류가 발생했습니다.');
     }
+  };
+
+  // ===================== 정류장 관리 함수 =====================
+
+  // 정류장 제거 함수
+  const handleRemoveStation = (index) => {
+    if (showAddForm) {
+      setNewRoute(prevRoute => {
+        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
+        if (existingStations.length === 0) return prevRoute;
+        
+        const updatedStations = [...existingStations];
+        updatedStations.splice(index, 1);
+        
+        const reorderedStations = updatedStations.map((station, idx) => ({
+          ...station,
+          sequence: idx + 1
+        }));
+        
+        return {
+          ...prevRoute,
+          stations: reorderedStations
+        };
+      });
+    } else if (showEditForm) {
+      setEditRoute(prevRoute => {
+        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
+        if (existingStations.length === 0) return prevRoute;
+        
+        const updatedStations = [...existingStations];
+        updatedStations.splice(index, 1);
+        
+        const reorderedStations = updatedStations.map((station, idx) => ({
+          ...station,
+          sequence: idx + 1
+        }));
+        
+        return {
+          ...prevRoute,
+          stations: reorderedStations
+        };
+      });
+    }
+    
+    setTimeout(() => {
+      highlightSelectedStations();
+    }, 300);
+  };
+
+  // 정류장 드래그 이동 처리 함수
+  const moveStation = (dragIndex, hoverIndex, isEditMode = false) => {
+    if (isEditMode) {
+      setEditRoute(prevRoute => {
+        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
+        if (existingStations.length <= 1) return prevRoute;
+        
+        const updatedStations = [...existingStations];
+        const [movedItem] = updatedStations.splice(dragIndex, 1);
+        updatedStations.splice(hoverIndex, 0, movedItem);
+        
+        const reorderedStations = updatedStations.map((station, idx) => ({
+          ...station,
+          sequence: idx + 1
+        }));
+        
+        return {
+          ...prevRoute,
+          stations: reorderedStations
+        };
+      });
+    } else {
+      setNewRoute(prevRoute => {
+        const existingStations = Array.isArray(prevRoute.stations) ? [...prevRoute.stations] : [];
+        if (existingStations.length <= 1) return prevRoute;
+        
+        const updatedStations = [...existingStations];
+        const [movedItem] = updatedStations.splice(dragIndex, 1);
+        updatedStations.splice(hoverIndex, 0, movedItem);
+        
+        const reorderedStations = updatedStations.map((station, idx) => ({
+          ...station,
+          sequence: idx + 1
+        }));
+        
+        return {
+          ...prevRoute,
+          stations: reorderedStations
+        };
+      });
+    }
+    
+    setTimeout(() => {
+      highlightSelectedStations();
+    }, 300);
+  };
+
+  // ===================== 유틸리티 함수 =====================
+
+  // 정류장 ID로 정류장 이름 가져오기
+  const getStationName = (stationId) => {
+    if (!stationId) return '정류장 정보 없음';
+    const station = stations.find(s => s.id === stationId);
+    return station ? station.name : '알 수 없는 정류장';
+  };
+
+  // 정류장 객체 가져오기
+  const getStationById = (stationId) => {
+    if (!stationId) return null;
+    return stations.find(s => s.id === stationId);
   };
 
   // 이미 추가된 정류장 배열을 기준으로 정류장 정렬
@@ -993,66 +978,22 @@ function RouteManagement() {
       });
   };
 
-  // 노선 검색 (debounce 적용)
-  const handleSearchChange = (e) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-    
-    // 300ms debounce 적용
-    if (window.searchTimeout) {
-      clearTimeout(window.searchTimeout);
-    }
-    
-    window.searchTimeout = setTimeout(() => {
-      if (value) {
-        searchRoutesByName(value);
-      } else {
-        fetchRoutes();
-      }
-    }, 300);
-  };
-
-  // 컴포넌트 언마운트 시 정리
-  useEffect(() => {
-    return () => {
-      // 마커 정리
-      if (markersRef.current.length > 0) {
-        markersRef.current.forEach(marker => marker.setMap(null));
-        markersRef.current = [];
-      }
-      
-      // 지도 참조 정리
-      kakaoMapRef.current = null;
-      setMapInitialized(false);
-      
-      // 검색 타이머 정리
-      if (window.searchTimeout) {
-        clearTimeout(window.searchTimeout);
-      }
-    };
-  }, []);
-
-  // 노선 정보에서 stationId 추출 (레퍼런스 객체 처리)
+  // 노선 정보에서 stationId 추출
   const extractStationId = (stationRef) => {
     if (!stationRef) return null;
     
-    // stationId가 직접 문자열인 경우
     if (typeof stationRef === 'string') {
       return stationRef;
     }
     
-    // stationId가 객체인 경우 (예: {$ref: "stations", $id: {$oid: "..."}}
     if (stationRef.$id && stationRef.$id.$oid) {
       return stationRef.$id.$oid;
     }
     
-    // 직접 stationId 필드가 있는 경우
     if (stationRef.stationId) {
-      // 재귀적으로 처리 (stationId가 다시 객체일 수 있음)
       return extractStationId(stationRef.stationId);
     }
     
-    // ID가 없는 경우
     return null;
   };
 
@@ -1063,7 +1004,6 @@ function RouteManagement() {
     }
     
     return route.stations.map((station, index) => {
-      // stationId 추출
       const stationId = extractStationId(station);
       
       return {
@@ -1073,6 +1013,27 @@ function RouteManagement() {
       };
     }).sort((a, b) => a.sequence - b.sequence);
   };
+
+  // ===================== 컴포넌트 정리 =====================
+
+  // 컴포넌트 언마운트 시 정리
+  useEffect(() => {
+    return () => {
+      if (markersRef.current.length > 0) {
+        markersRef.current.forEach(marker => marker.setMap(null));
+        markersRef.current = [];
+      }
+      
+      kakaoMapRef.current = null;
+      setMapInitialized(false);
+      
+      if (window.searchTimeout) {
+        clearTimeout(window.searchTimeout);
+      }
+    };
+  }, []);
+
+  // ===================== 로딩 및 에러 상태 처리 =====================
 
   // 로딩 상태 표시
   if (isLoading && !selectedRoute && !showAddForm && !showEditForm) {
@@ -1096,14 +1057,22 @@ function RouteManagement() {
     );
   }
 
+  // ===================== 렌더링 =====================
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="route-management">
-        <h1>노선 관리</h1>
+        {/* 헤더 영역 */}
+        <div className="management-header">
+          <h1>노선 관리</h1>
+        </div>
+
+        {/* 메인 컨텐츠 영역 */}
         <div className="management-container">
+          {/* 왼쪽 목록 영역 */}
           <div className="list-section">
             <div className="list-header">
-              <h2>노선 목록</h2>
+              <h2>노선 목록 ({routes.length}개)</h2>
               <div className="search-container">
                 <input
                   type="text"
@@ -1115,9 +1084,12 @@ function RouteManagement() {
               </div>
               <button onClick={handleAddRouteClick} className="add-button">+ 노선 추가</button>
             </div>
+            
             <div className="route-list">
               {routes.length === 0 ? (
-                <div className="empty-list">등록된 노선이 없습니다.</div>
+                <div className="empty-list">
+                  {searchQuery ? '검색 결과가 없습니다.' : '등록된 노선이 없습니다.'}
+                </div>
               ) : (
                 routes.map(route => (
                   <div 
@@ -1158,8 +1130,10 @@ function RouteManagement() {
             </div>
           </div>
           
+          {/* 오른쪽 상세 영역 */}
           <div className="detail-section">
             {selectedRoute && !showEditForm ? (
+              // 노선 상세 정보
               <div className="route-details">
                 <div className="detail-header">
                   <h2>노선 상세 정보</h2>
@@ -1172,7 +1146,7 @@ function RouteManagement() {
                   </div>
                   <div className="detail-row">
                     <label>소속:</label>
-                    <span>{selectedRoute.organizationId || 'Uasidnw'}</span>
+                    <span>{organizationName || selectedRoute.organizationId || '정보 없음'}</span>
                   </div>
                   <div className="detail-section">
                     <h3>경유 정류장</h3>
@@ -1214,6 +1188,7 @@ function RouteManagement() {
                 </div>
               </div>
             ) : showAddForm ? (
+              // 노선 추가 폼
               <div className="add-route-form">
                 <h2>새 노선 등록</h2>
                 <form onSubmit={handleAddRoute}>
@@ -1279,6 +1254,7 @@ function RouteManagement() {
                 </form>
               </div>
             ) : showEditForm && editRoute ? (
+              // 노선 수정 폼
               <div className="edit-route-form">
                 <h2>노선 수정</h2>
                 <form onSubmit={handleUpdateRoute}>
@@ -1343,6 +1319,7 @@ function RouteManagement() {
                 </form>
               </div>
             ) : (
+              // 기본 상태
               <div className="no-selection">
                 <p>좌측 목록에서 노선을 선택하거나 새 노선을 등록하세요.</p>
               </div>
@@ -1390,7 +1367,7 @@ function RouteManagement() {
                 alignItems: 'center',
                 marginBottom: '10px'
               }}>
-                <h3>지도에서 정류장 선택</h3>
+                <h3>조직 정류장에서 선택</h3>
                 <button 
                   className="close-map-button"
                   onClick={handleCloseMap}
@@ -1404,17 +1381,19 @@ function RouteManagement() {
                   ✕
                 </button>
               </div>
+              
               <div className="map-instructions" style={{
                 marginBottom: '10px',
                 padding: '10px',
                 backgroundColor: '#f8f9fa',
                 borderRadius: '4px'
               }}>
-                <p><strong>여러 개의 정류장을 연속해서 선택할 수 있습니다.</strong></p>
+                <p><strong>조직의 정류장만 표시됩니다.</strong></p>
                 <p>지도에서 정류장 마커를 클릭하면 자동으로 노선에 추가됩니다.</p>
                 <p>이미 추가된 정류장은 <span style={{color: '#2196F3'}}>별 모양</span>으로 표시됩니다.</p>
                 <p>선택한 순서가 잘못되었다면, 아래 목록에서 <strong>드래그하여 순서를 변경</strong>할 수 있습니다.</p>
               </div>
+              
               <div 
                 id="kakao-map-container"
                 ref={mapRef} 
@@ -1430,6 +1409,7 @@ function RouteManagement() {
                   minHeight: '400px'
                 }}
               ></div>
+              
               <div className="map-station-list" style={{
                 maxHeight: '200px',
                 overflowY: 'auto',
@@ -1468,9 +1448,10 @@ function RouteManagement() {
                       ))}
                     </div>
                   ) : (
-                    <p className="no-stations">선택된 정류장이 없습니다. 지도에서 정류장을 선택하세요.</p>
+                    <p className="no-stations">선택된 정류장이 없습니다. 지도에서 조직 정류장을 선택하세요.</p>
                   )}
                 </div>
+                
                 <div className="map-actions" style={{
                   marginTop: '15px',
                   textAlign: 'center'
