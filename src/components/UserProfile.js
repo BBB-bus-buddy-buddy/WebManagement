@@ -1,8 +1,23 @@
 // components/UserProfile.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import '../styles/UserProfile.css';
 
-function UserProfile({ user }) {
+function UserProfile() {
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // 컴포넌트가 마운트될 때 사용자 정보를 가져옵니다.
+    const fetchUserProfile = async () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        setUser(parsedUser);
+        console.log('사용자 정보:', parsedUser); // 디버깅용 로그
+      }
+    };
+    fetchUserProfile();
+  }, []);
+
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '관리자',

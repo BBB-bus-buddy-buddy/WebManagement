@@ -14,56 +14,8 @@ function UserManagement() {
 
   // 컴포넌트 마운트 시 현재 사용자 정보와 이용자 데이터 로드
   useEffect(() => {
-    fetchCurrentUser();
     fetchUsers();
   }, []);
-
-  // 현재 로그인한 사용자 정보 가져오기
-  const fetchCurrentUser = async () => {
-    try {
-      // 토큰에서 사용자 정보 추출 (빠른 방법)
-      const userFromToken = ApiService.getCurrentUserFromToken();
-      if (userFromToken) {
-        setCurrentUser(userFromToken);
-        
-        // 조직명 가져오기
-        if (userFromToken.organizationId) {
-          fetchOrganizationName(userFromToken.organizationId);
-        }
-      }
-      
-      // 서버에서 최신 사용자 정보 가져오기 (선택적)
-      const userFromServer = await ApiService.getCurrentUser();
-      if (userFromServer && userFromServer.data) {
-        setCurrentUser(userFromServer.data);
-        
-        // 조직명 가져오기
-        if (userFromServer.data.organizationId) {
-          fetchOrganizationName(userFromServer.data.organizationId);
-        }
-      }
-    } catch (error) {
-      console.error('현재 사용자 정보 가져오기 실패:', error);
-      // 토큰에서라도 정보를 가져오도록 시도
-      const userFromToken = ApiService.getCurrentUserFromToken();
-      if (userFromToken) {
-        setCurrentUser(userFromToken);
-      }
-    }
-  };
-
-  // 조직명 가져오기
-  const fetchOrganizationName = async (orgId) => {
-    try {
-      const response = await ApiService.verifyOrganization(orgId);
-      if (response && response.data && response.data.name) {
-        setOrganizationName(response.data.name);
-      }
-    } catch (error) {
-      console.error('조직명 조회 실패:', error);
-      setOrganizationName(orgId); // 실패 시 조직 ID 표시
-    }
-  };
 
   // 현재 조직의 이용자 데이터만 가져오기
   const fetchUsers = async () => {
@@ -229,7 +181,6 @@ function UserManagement() {
                 >
                   <div className="user-info">
                     <h3>{user.name}</h3>
-                    <p className="user-email">{user.email}</p>
                   </div>
                   <div className="user-actions">
                     <button 

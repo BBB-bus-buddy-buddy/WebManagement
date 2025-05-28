@@ -1,5 +1,5 @@
 // App.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import ApiService from './services/api'; // ApiService 임포트 추가
 import Login from './components/Login';
@@ -29,19 +29,30 @@ import './styles/PassengerStats.css';
 // useNavigate 훅을 사용하기 위한 래퍼 컴포넌트
 function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   const handleLogin = (userData) => {
     setIsLoggedIn(true);
-    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
   };
+
+  useEffect(() => {
+    // 컴포넌트가 마운트될 때 로컬 스토리지에서 사용자 정보 확인
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      if (parsedUser) {
+        setIsLoggedIn(true);
+        console.log('로컬 스토리지에서 사용자 정보 가져오기:', parsedUser); // 디버깅용 로그
+      }
+    }
+  }, []);
 
   const handleLogout = () => {
     // 로그아웃 처리는 Header 컴포넌트에서 이미 수행됨
     // 여기서는 상태만 업데이트
     setIsLoggedIn(false);
-    setUser(null);
+    localStorage.removeItem('user');
     
     // 로그인 페이지로 리다이렉트
     navigate('/login');
@@ -53,7 +64,7 @@ function AppContent() {
         <>
           <Sidebar />
           <div className="content">
-            <Header user={user} onLogout={handleLogout} />
+            <Header onLogout={handleLogout} />
             <div className="page-content">
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
@@ -64,7 +75,7 @@ function AppContent() {
                 <Route path="/schedule" element={<BusSchedule />} />
                 <Route path="/operations" element={<BusOperationInfo />} />
                 <Route path="/stations" element={<StationManagement />} />
-                <Route path="/profile" element={<UserProfile user={user} />} />
+                <Route path="/profile" element={<UserProfile/>} />
                 <Route path="/statistics" element={<PassengerStats />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>

@@ -279,34 +279,23 @@ static logout() {
    * @returns {Promise<Object>} 추가된 정류장 정보
    */
   static async addStation(stationData) {
-    try {
-      // 요청 데이터 형식 확인 - MongoDB GeoJsonPoint 형식 [경도, 위도]로 변환
-      const requestData = {
-        name: stationData.name,
-        location: {
-          type: 'Point',
-          coordinates: [
-            // 좌표가 이미 [경도, 위도] 형식이라면 그대로 사용, 아니면 변환
-            stationData.location.coordinates[0] > 90 ? 
-              stationData.location.coordinates[0] : // 이미 경도면 그대로
-              stationData.location.coordinates[1],  // 위도면 인덱스 1(경도)로 교체
-            stationData.location.coordinates[0] > 90 ? 
-              stationData.location.coordinates[1] : // 이미 경도면 인덱스 1(위도)로 교체
-              stationData.location.coordinates[0]   // 위도면 그대로
-          ]
-        }
-        // organizationId는 제외 - 서버에서 토큰으로부터 추출
-      };
-      
-      console.log('정류장 등록 요청 데이터 (변환 후):', requestData);
-      
-      const data = await ApiService.apiRequest('station', 'POST', requestData);
-      return data;
-    } catch (error) {
-      console.error('정류장 등록 실패:', error);
-      throw error;
-    }
+  try {
+    // 서버가 요구하는 형식: { name: string, latitude: number, longitude: number }
+    const requestData = {
+      name: stationData.name,
+      latitude: stationData.location.coordinates[0], // 위도
+      longitude: stationData.location.coordinates[1] // 경도
+    };
+    
+    console.log('정류장 등록 요청 데이터:', requestData);
+    
+    const data = await ApiService.apiRequest('station', 'POST', requestData);
+    return data;
+  } catch (error) {
+    console.error('정류장 등록 실패:', error);
+    throw error;
   }
+}
   
   /**
    * 정류장 수정
@@ -315,9 +304,23 @@ static logout() {
    * @returns {Promise<Object>} 수정된 정류장 정보
    */
   static async updateStation(stationId, stationData) {
-    const data = await ApiService.apiRequest(`station/${stationId}`, 'PUT', stationData);
+  try {
+    // 서버가 요구하는 형식: { name: string, latitude: number, longitude: number }
+    const requestData = {
+      name: stationData.name,
+      latitude: stationData.location.coordinates[0], // 위도
+      longitude: stationData.location.coordinates[1] // 경도
+    };
+    
+    console.log('정류장 수정 요청 데이터:', requestData);
+    
+    const data = await ApiService.apiRequest(`station/${stationId}`, 'PUT', requestData);
     return data;
+  } catch (error) {
+    console.error('정류장 수정 실패:', error);
+    throw error;
   }
+}
   
   /**
    * 정류장 삭제
@@ -438,107 +441,128 @@ static convertToServerFormat(appData, drivers, buses, routes) {
 }
 // api.js에 추가할 버스 관련 메서드
   
-  // ==================== 버스 관련 메서드 (수정됨) ====================
+// ==================== 버스 관련 메서드 (새 API 스펙에 맞게 수정) ====================
 
 /**
  * 모든 버스 조회
- * @returns {Promise<Array>} 버스 목록
+ * GET /api/bus
+ * @returns {Promise<Object>} 버스 목록 응답
  */
 static async getAllBuses() {
-  const data = await ApiService.apiRequest('bus');
-  return data;
-}
-
-/**
- * 특정 버스 조회
- * @param {string} busNumber 조회할 버스 번호
- * @returns {Promise<Object>} 버스 정보
- */
-static async getBus(busNumber) {
-  const data = await ApiService.apiRequest(`bus/${busNumber}`);
-  return data;
-}
-
-/**
- * 버스 좌석 정보 조회
- * @param {string} busNumber 조회할 버스 번호
- * @returns {Promise<Object>} 버스 좌석 정보
- */
-static async getBusSeats(busNumber) {
-  const data = await ApiService.apiRequest(`bus/seats/${busNumber}`);
-  return data;
-}
-
-/**
- * 버스 위치 정보 조회
- * @param {string} busNumber 조회할 버스 번호
- * @returns {Promise<Object>} 버스 위치 정보
- */
-static async getBusLocation(busNumber) {
-  const data = await ApiService.apiRequest(`bus/location/${busNumber}`);
-  return data;
-}
-
-/**
- * 버스 추가 (관리자 권한 필요) - 수정된 버전
- * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": "45" }
- * @param {Object} busData 추가할 버스 데이터
- * @returns {Promise<Object>} 추가된 버스 정보
- */
-static async addBus(busData) {
   try {
-    console.log('버스 추가 API 요청 데이터:', busData);
+    console.log('버스 목록 조회 시작...');
+    const response = await ApiService.apiRequest('bus');
+    console.log('버스 목록 API 응답:', response);
+    console.log('응답 타입:', typeof response);
+    console.log('응답 구조 키들:', response ? Object.keys(response) : 'null response');
     
-    // API 스펙에 맞게 데이터 구성
-    const requestData = {
-      busNumber: busData.busNumber,
-      routeId: busData.routeId,
-      totalSeats: busData.totalSeats.toString() // 문자열로 변환
-    };
-    
-    console.log('최종 요청 데이터:', requestData);
-    
-    const response = await ApiService.apiRequest('bus', 'POST', requestData);
-    console.log('버스 추가 응답:', response);
+    if (response && response.data) {
+      console.log('응답 데이터 길이:', response.data.length);
+      console.log('응답 메시지:', response.message);
+      
+      if (response.data.length === 0) {
+        console.log('⚠️ 버스 데이터가 비어있습니다. 가능한 원인:');
+        console.log('  1. 현재 조직에 등록된 버스가 없음');
+        console.log('  2. 사용자 권한으로 인한 데이터 필터링');
+        console.log('  3. 서버 측 조직별 필터링');
+      } else {
+        console.log('✅ 버스 데이터 조회 성공:', response.data.length, '개');
+      }
+    }
     
     return response;
   } catch (error) {
-    console.error('버스 추가 중 오류:', error);
+    console.error('❌ 버스 목록 조회 실패:', error);
     throw error;
   }
 }
 
 /**
- * 버스 수정 - 수정된 버전
- * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": 45 }
+ * 특정 버스 조회
+ * GET /api/bus/{busNumber}
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 정보
+ */
+static async getBus(busNumber) {
+  try {
+    const response = await ApiService.apiRequest(`bus/${busNumber}`);
+    console.log('개별 버스 조회 응답:', response);
+    return response;
+  } catch (error) {
+    console.error('개별 버스 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 등록
+ * POST /api/bus
+ * 요청 파라미터: { routeId, totalSeats, busRealNumber, operationalStatus, serviceStatus }
+ * @param {Object} busData 등록할 버스 데이터
+ * @returns {Promise<Object>} 등록된 버스 정보
+ */
+static async addBus(busData) {
+  try {
+    console.log('버스 등록 요청 데이터:', busData);
+    
+    // 새 API 스펙에 맞게 데이터 구성
+    const requestData = {
+      routeId: busData.routeId,
+      totalSeats: Number(busData.totalSeats),
+      busRealNumber: busData.busRealNumber,
+      operationalStatus: busData.operationalStatus || 'ACTIVE',
+      serviceStatus: busData.serviceStatus || 'NOT_IN_SERVICE'
+    };
+    
+    console.log('최종 버스 등록 요청 데이터:', requestData);
+    
+    const response = await ApiService.apiRequest('bus', 'POST', requestData);
+    console.log('버스 등록 응답:', response);
+    
+    return response;
+  } catch (error) {
+    console.error('버스 등록 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 정보 수정
+ * PUT /api/bus/{busNumber}
+ * 요청 파라미터: { busNumber, busRealNumber, routeId, totalSeats, operationalStatus, serviceStatus }
  * @param {Object} busData 수정할 버스 데이터
  * @returns {Promise<Object>} 수정된 버스 정보
  */
 static async updateBus(busData) {
   try {
-    console.log('버스 수정 API 요청 데이터:', busData);
+    console.log('버스 수정 요청 데이터:', busData);
     
-    // API 스펙에 맞게 데이터 구성
+    // 새 API 스펙에 맞게 데이터 구성
     const requestData = {
       busNumber: busData.busNumber,
+      busRealNumber: busData.busRealNumber,
       routeId: busData.routeId,
-      totalSeats: Number(busData.totalSeats) // 숫자로 변환
+      totalSeats: Number(busData.totalSeats),
+      operationalStatus: busData.operationalStatus,
+      serviceStatus: busData.serviceStatus
     };
     
-    console.log('최종 요청 데이터:', requestData);
+    console.log('최종 버스 수정 요청 데이터:', requestData);
     
-    const response = await ApiService.apiRequest('bus', 'PUT', requestData);
+    // URL에 busNumber 포함
+    const response = await ApiService.apiRequest(`bus/${busData.busNumber}`, 'PUT', requestData);
     console.log('버스 수정 응답:', response);
     
     return response;
   } catch (error) {
-    console.error('버스 수정 중 오류:', error);
+    console.error('버스 수정 실패:', error);
     throw error;
   }
 }
 
 /**
  * 버스 삭제
+ * DELETE /api/bus/{busNumber}
  * @param {string} busNumber 삭제할 버스 번호
  * @returns {Promise<Object>} 삭제 결과
  */
@@ -549,7 +573,7 @@ static async deleteBus(busNumber) {
     console.log('버스 삭제 응답:', response);
     return response;
   } catch (error) {
-    console.error('버스 삭제 중 오류:', error);
+    console.error('버스 삭제 실패:', error);
     throw error;
   }
 }
@@ -840,17 +864,6 @@ static async getCurrentOrganization() {
 
 // ==================== 현재 사용자 정보 관련 메서드 ====================
 /**
- * 현재 로그인한 사용자 정보 조회
- * @returns {Promise<Object>} 사용자 정보
- */
-static async getCurrentUser() {
-  try {
-    const data = await ApiService.apiRequest('auth/me');
-    return data;
-  } catch (error) {
-    console.error('현재 사용자 정보 조회 실패:', error);
-    throw error;
-  }
 }
 
 /**

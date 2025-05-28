@@ -4,9 +4,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import ApiService from '../services/api';
 import '../styles/Layout.css';
 
-function Header({ user, onLogout }) {
+function Header({ onLogout }) {
+  const [user, setUser] = useState(null); // 사용자 정보 상태
   const navigate = useNavigate();
   const [organizationName, setOrganizationName] = useState('버스 관리 시스템'); // 기본값 설정
+
+  useEffect(() => {
+    // 로컬 스토리지에서 사용자 정보 가져오기
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+      if (parsedUser) {
+        setUser(parsedUser); // 로컬 스토리지에서 가져온 사용자 정보로 업데이트
+        console.log('로컬 스토리지에서 사용자 정보 가져오기:', parsedUser); // 디버깅용 로그
+      }
+    }
+  }, []);
 
   // 컴포넌트 마운트 시 조직 정보 가져오기
   useEffect(() => {
