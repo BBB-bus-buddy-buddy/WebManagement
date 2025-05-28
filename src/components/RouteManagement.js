@@ -201,52 +201,9 @@ function RouteManagement() {
   
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
-    fetchCurrentUser();
     fetchRoutes();
     fetchStations();
   }, []);
-
-  // 현재 로그인한 사용자 정보 가져오기
-  const fetchCurrentUser = async () => {
-    try {
-      const userFromToken = ApiService.getCurrentUserFromToken();
-      if (userFromToken) {
-        setCurrentUser(userFromToken);
-        
-        if (userFromToken.organizationId) {
-          fetchOrganizationName(userFromToken.organizationId);
-        }
-      }
-      
-      const userFromServer = await ApiService.getCurrentUser();
-      if (userFromServer && userFromServer.data) {
-        setCurrentUser(userFromServer.data);
-        
-        if (userFromServer.data.organizationId) {
-          fetchOrganizationName(userFromServer.data.organizationId);
-        }
-      }
-    } catch (error) {
-      console.error('현재 사용자 정보 가져오기 실패:', error);
-      const userFromToken = ApiService.getCurrentUserFromToken();
-      if (userFromToken) {
-        setCurrentUser(userFromToken);
-      }
-    }
-  };
-
-  // 조직명 가져오기
-  const fetchOrganizationName = async (orgId) => {
-    try {
-      const response = await ApiService.verifyOrganization(orgId);
-      if (response && response.data && response.data.name) {
-        setOrganizationName(response.data.name);
-      }
-    } catch (error) {
-      console.error('조직명 조회 실패:', error);
-      setOrganizationName(orgId);
-    }
-  };
 
   // 현재 조직의 노선 데이터만 가져오기
   const fetchRoutes = async () => {
@@ -1457,7 +1414,8 @@ function RouteManagement() {
                   marginTop: '15px',
                   textAlign: 'center'
                 }}>
-                  <button 
+                </div>
+                <button 
                     className="map-done-button"
                     onClick={handleCloseMap}
                     style={{
@@ -1473,9 +1431,9 @@ function RouteManagement() {
                   >
                     선택 완료
                   </button>
-                </div>
               </div>
             </div>
+            
           </div>
         )}
       </div>

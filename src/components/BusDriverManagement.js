@@ -16,84 +16,40 @@ function BusDriverManagement() {
     fetchDrivers();
   }, []);
 
-  // 기사 데이터 가져오기 (DRIVER 역할의 사용자)
+  // 버스 기사 데이터 가져오기
   const fetchDrivers = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // DRIVER 역할의 사용자만 조회
-      const response = await ApiService.apiRequest('user?role=DRIVER');
+      // User API에서 DRIVER 역할만 조회
+      const response = await ApiService.getOrganizationDrivers();
       
-      console.log('기사 API 응답 데이터:', response);
-      
-      let driverList = [];
-      
-      // 응답 구조 확인 - user 속성에 배열이 있는지 확인
-      if (response && response.user && Array.isArray(response.user)) {
-        driverList = response.user;
-      } 
-      // data 속성 안에 user 배열이 있는지 확인
-      else if (response && response.data && response.data.user && Array.isArray(response.data.user)) {
-        driverList = response.data.user;
+      if (response?.data && Array.isArray(response.data)) {
+        // 각 기사의 운행 기록 정보 추가
+        const driversWithRecords = await Promise.all(
+          response.data.map(async (driver) => {
+            try {
+              const operationPlans = await ApiService.getDriverOperationPlans(driver.name, { limit: 5 });
+              return {
+                ...driver,
+                drivingRecords: operationPlans
+              };
+            } catch (error) {
+              return {
+                ...driver,
+                drivingRecords: []
+              };
+            }
+          })
+        );
+        
+        setDrivers(driversWithRecords);
+      } else {
+        setDrivers([]);
       }
-      // 기존 구조 확인 (data 배열로 직접 오는 경우)
-      else if (response && response.data && Array.isArray(response.data)) {
-        driverList = response.data;
-      } 
-      else if (Array.isArray(response)) {
-        driverList = response;
-      }
-      else {
-        console.error('응답 데이터 형식이 예상과 다릅니다:', response);
-        driverList = [];
-      }
-      
-      console.log('추출된 driverList:', driverList);
-      
-      // DRIVER 역할만 필터링
-      const driverRoleOnly = driverList.filter(user => user && user.role === 'DRIVER');
-      console.log('DRIVER 역할 필터링 후:', driverRoleOnly);
-      
-      // 각 기사의 데이터 구조 확인
-      driverRoleOnly.forEach((driver, index) => {
-        console.log(`기사 ${index} 데이터:`, {
-          name: driver.name,
-          birthDate: driver.birthDate,
-          identity: driver.identity,
-          phoneNumber: driver.phoneNumber,
-          licenseType: driver.licenseType,
-          licenseNumber: driver.licenseNumber,
-          licenseSerial: driver.licenseSerial,
-          licenseExpiryDate: driver.licenseExpiryDate
-        });
-      });
-      
-      // 운행 기록 정보 추가
-      const driversWithRecords = await Promise.all(
-        driverRoleOnly.map(async (driver) => {
-          try {
-            // 각 기사의 운행 기록 조회 시도
-            const operationPlans = await fetchDriverOperationHistory(driver.name);
-            return {
-              ...driver,
-              drivingRecords: operationPlans || []
-            };
-          } catch (error) {
-            console.warn(`기사 ${driver.name}의 운행 기록 조회 실패:`, error);
-            return {
-              ...driver,
-              drivingRecords: []
-            };
-          }
-        })
-      );
-      
-      setDrivers(driversWithRecords);
-      console.log('최종 기사 목록:', driversWithRecords);
       
     } catch (err) {
-      console.error('기사 데이터 로드 중 오류:', err);
       setError('기사 데이터를 불러오는 중 오류가 발생했습니다.');
       setDrivers([]);
     } finally {
@@ -101,49 +57,18 @@ function BusDriverManagement() {
     }
   };
 
-  // 기사별 운행 기록 조회 (이름으로 검색)
-  const fetchDriverOperationHistory = async (driverName) => {
-    try {
-      // 전체 운행 계획 조회
-      const response = await ApiService.getAllOperationPlans();
-      
-      if (response && Array.isArray(response.data)) {
-        // 해당 기사의 운행 기록만 필터링 (이름으로)
-        const driverPlans = response.data.filter(plan => {
-          return plan.driverName === driverName;
-        });
-        
-        // 운행 기록을 앱 형식으로 변환
-        return driverPlans.map(plan => ({
-          date: plan.operationDate || new Date().toISOString().split('T')[0],
-          busNumber: plan.busNumber || '정보 없음',
-          route: plan.routeName || '정보 없음',
-          startTime: plan.operationTime ? plan.operationTime.split('-')[0] : '정보 없음',
-          endTime: plan.operationTime ? plan.operationTime.split('-')[1] : '정보 없음'
-        }));
-      }
-      
-      return [];
-    } catch (error) {
-      console.warn('운행 기록 조회 실패:', error);
-      return [];
-    }
-  };
-
   // 기사 클릭 처리
   const handleDriverClick = async (driver) => {
-    if (selectedDriver && selectedDriver._id?.$oid === driver._id?.$oid) {
+    if (selectedDriver?.id === driver.id) {
       return;
     }
     
     setSelectedDriver(driver);
     
-    // 선택된 기사의 최신 운행 기록 조회
     try {
-      const operationHistory = await fetchDriverOperationHistory(driver.name);
-      setDriverOperationPlans(operationHistory);
+      const operationPlans = await ApiService.getDriverOperationPlans(driver.name, { limit: 10 });
+      setDriverOperationPlans(operationPlans);
     } catch (error) {
-      console.error('운행 기록 조회 실패:', error);
       setDriverOperationPlans([]);
     }
   };
@@ -158,25 +83,24 @@ function BusDriverManagement() {
     const driverId = driver._id?.$oid || driver.id;
     
     if (!driverId) {
-      console.error('삭제할 기사의 ID가 없습니다');
+      alert('삭제할 기사의 ID가 없습니다.');
       return;
     }
     
-    if (window.confirm('정말로 이 버스 기사를 삭제하시겠습니까?')) {
+    if (window.confirm(`정말로 ${driver.name} 기사를 삭제하시겠습니까?`)) {
       try {
-        await ApiService.apiRequest(`user/${driverId}`, 'DELETE');
+        await ApiService.deleteDriver(driverId);
         
         // 성공적으로 삭제된 후 기사 목록 새로고침
-        fetchDrivers();
+        await fetchDrivers();
         
-        if (selectedDriver && selectedDriver._id?.$oid === driverId) {
+        if (selectedDriver?.id === driverId) {
           setSelectedDriver(null);
           setDriverOperationPlans([]);
         }
         
-        alert('버스 기사가 삭제되었습니다.');
+        alert(`${driver.name} 기사가 삭제되었습니다.`);
       } catch (error) {
-        console.error('기사 삭제 중 오류:', error);
         alert('기사 삭제 중 오류가 발생했습니다.');
       }
     }
@@ -184,18 +108,16 @@ function BusDriverManagement() {
 
   // 검색어에 따라 기사 필터링
   const filteredDrivers = drivers.filter(driver =>
-    driver && driver.name && driver.name.toLowerCase().includes(searchQuery.toLowerCase())
+    driver?.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // 나이 계산 함수 (YYYYMMDD 형식)
+  // 유틸리티 함수들
   const calculateAge = (birthDate) => {
-    console.log('calculateAge - birthDate:', birthDate);
-    if (!birthDate) return '정보 없음';
+    if (!birthDate) return null;
     
     try {
-      // YYYYMMDD 형식을 YYYY-MM-DD로 변환
       const birthDateStr = birthDate.toString();
-      if (birthDateStr.length !== 8) return '정보 없음';
+      if (birthDateStr.length !== 8) return null;
       
       const year = parseInt(birthDateStr.substring(0, 4));
       const month = parseInt(birthDateStr.substring(4, 6));
@@ -212,19 +134,16 @@ function BusDriverManagement() {
       
       return age;
     } catch (error) {
-      console.error('나이 계산 오류:', error);
-      return '정보 없음';
+      return null;
     }
   };
 
-  // 생년월일 포맷팅 (YYYYMMDD -> YYYY-MM-DD)
   const formatBirthDate = (birthDate) => {
-    console.log('formatBirthDate - birthDate:', birthDate);
-    if (!birthDate) return '정보 없음';
+    if (!birthDate) return null;
     
     try {
       const birthDateStr = birthDate.toString();
-      if (birthDateStr.length !== 8) return '정보 없음';
+      if (birthDateStr.length !== 8) return null;
       
       const year = birthDateStr.substring(0, 4);
       const month = birthDateStr.substring(4, 6);
@@ -232,14 +151,11 @@ function BusDriverManagement() {
       
       return `${year}-${month}-${day}`;
     } catch (error) {
-      console.error('생년월일 포맷팅 오류:', error);
-      return '정보 없음';
+      return null;
     }
   };
 
-  // 성별 추출 (주민등록번호에서)
   const getGenderFromIdentity = (identity) => {
-    console.log('getGenderFromIdentity - identity:', identity);
     if (!identity) return '정보 없음';
     
     try {
@@ -251,14 +167,12 @@ function BusDriverManagement() {
       if (genderCode === '2' || genderCode === '4') return '여성';
       return '정보 없음';
     } catch (error) {
-      console.error('성별 추출 오류:', error);
       return '정보 없음';
     }
   };
 
-  // 면허 만료일까지 남은 기간 계산
   const getLicenseStatus = (expiryDate) => {
-    if (!expiryDate) return '정보 없음';
+    if (!expiryDate) return { status: 'unknown', message: '정보 없음' };
     
     try {
       const today = new Date();
@@ -266,238 +180,378 @@ function BusDriverManagement() {
       const diffTime = expiry - today;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (diffDays < 0) return '만료됨';
-      if (diffDays < 30) return `${diffDays}일 후 만료`;
-      if (diffDays < 365) return `${Math.ceil(diffDays / 30)}개월 후 만료`;
-      return `${Math.ceil(diffDays / 365)}년 후 만료`;
+      if (diffDays < 0) {
+        return { status: 'expired', message: '만료됨', daysLeft: diffDays };
+      } else if (diffDays < 30) {
+        return { status: 'warning', message: `${diffDays}일 후 만료`, daysLeft: diffDays };
+      } else if (diffDays < 365) {
+        const months = Math.ceil(diffDays / 30);
+        return { status: 'normal', message: `${months}개월 후 만료`, daysLeft: diffDays };
+      } else {
+        const years = Math.ceil(diffDays / 365);
+        return { status: 'normal', message: `${years}년 후 만료`, daysLeft: diffDays };
+      }
     } catch (error) {
-      return '정보 없음';
+      return { status: 'error', message: '정보 없음' };
     }
   };
 
-  // 전화번호 표시 함수
-  const getPhoneDisplay = (phoneNumber) => {
-    if (!phoneNumber) return '정보 없음';
-    return phoneNumber;
-  };
-
-  // 가입 연도 계산 (생년월일 기반으로 추정)
-  const getJoinYear = (birthDate) => {
-    if (!birthDate) return new Date().getFullYear();
-    
-    try {
-      const year = parseInt(birthDate.substring(0, 4));
-      // 20세가 되는 해 + 2년 정도로 추정
-      return year + 22;
-    } catch (error) {
-      return new Date().getFullYear();
-    }
-  };
-
-  // 기사 번호 생성 (면허번호 기반)
-  const getDriverNumber = (driver) => {
+  const generateDriverNumber = (driver) => {
     if (!driver) return '정보 없음';
     
-    // 면허 시리얼 번호가 있으면 사용, 없으면 이메일 기반
     if (driver.licenseSerial) {
       return `D-${driver.licenseSerial}`;
     }
     
-    // 이메일 앞부분 + ID 뒷부분으로 기사 번호 생성
     const emailPrefix = driver.email ? driver.email.split('@')[0] : 'D';
-    const idSuffix = driver._id?.$oid ? driver._id.$oid.slice(-4) : '0000';
+    const idSuffix = driver._id?.$oid ? driver._id.$oid.slice(-4) : 
+                     driver.id ? driver.id.slice(-4) : '0000';
     
     return `${emailPrefix.toUpperCase()}-${idSuffix}`;
   };
 
-  // 회사 정보 표시
+  // 조직 표시 이름
   const getCompanyDisplay = (organizationId) => {
     const organizations = {
       "Uasidnw": "울산과학대학교",
-      // 필요에 따라 다른 조직 추가
     };
-    
     return organizations[organizationId] || organizationId || '정보 없음';
   };
 
   // 로딩 상태 표시
-  if (isLoading && drivers.length === 0) {
+  if (isLoading) {
     return (
-      <div className="loading-container">
-        <p>데이터를 불러오는 중입니다...</p>
+      <div className="loading-container" style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '400px',
+        fontSize: '18px'
+      }}>
+        <div>
+          <div style={{ marginBottom: '10px' }}>🚌 버스 기사 데이터를 불러오는 중...</div>
+          <div style={{ fontSize: '14px', color: '#666' }}>잠시만 기다려주세요</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bus-driver-management">
-      <h1>버스 기사 관리</h1>
+    <div className="bus-driver-management" style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+      <div style={{ marginBottom: '30px' }}>
+        <h1 style={{ color: '#2c3e50', marginBottom: '10px' }}>🚌 버스 기사 관리</h1>
+        <p style={{ color: '#7f8c8d', margin: 0 }}>조직 내 버스 기사들의 정보를 관리합니다</p>
+      </div>
       
-      {error && <div className="error-message">{error}</div>}
+      {error && (
+        <div style={{
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          padding: '15px',
+          borderRadius: '5px',
+          marginBottom: '20px',
+          border: '1px solid #f5c6cb'
+        }}>
+          ❌ {error}
+        </div>
+      )}
       
-      <div className="management-container">
-        <div className="list-section">
-          <div className="list-header">
-            <h2>버스 기사 목록</h2>
-            <div className="search-container">
-              <input
-                type="text"
-                placeholder="기사 이름으로 검색"
-                value={searchQuery}
-                onChange={handleSearch}
-                className="search-input"
-              />
+      <div style={{ display: 'flex', gap: '20px', height: 'calc(100vh - 200px)' }}>
+        {/* 좌측 기사 목록 */}
+        <div style={{ 
+          flex: '1', 
+          backgroundColor: '#fff', 
+          borderRadius: '10px', 
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          padding: '20px'
+        }}>
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h2 style={{ margin: 0, color: '#34495e' }}>기사 목록 ({filteredDrivers.length}명)</h2>
+              <button 
+                onClick={fetchDrivers}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#3498db',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer'
+                }}
+              >
+                🔄 새로고침
+              </button>
             </div>
+            <input
+              type="text"
+              placeholder="🔍 기사 이름으로 검색"
+              value={searchQuery}
+              onChange={handleSearch}
+              style={{
+                width: '100%',
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: '5px',
+                fontSize: '14px'
+              }}
+            />
           </div>
-          <div className="driver-list">
-            {isLoading ? (
-              <div className="loading">로딩 중...</div>
-            ) : filteredDrivers.length === 0 ? (
-              <div className="empty-list">등록된 버스 기사가 없습니다.</div>
+          
+          <div style={{ 
+            maxHeight: 'calc(100% - 120px)', 
+            overflowY: 'auto',
+            border: '1px solid #ecf0f1',
+            borderRadius: '5px'
+          }}>
+            {filteredDrivers.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '40px',
+                color: '#95a5a6'
+              }}>
+                {drivers.length === 0 ? '등록된 버스 기사가 없습니다.' : '검색 결과가 없습니다.'}
+              </div>
             ) : (
               filteredDrivers.map(driver => (
                 <div 
-                  key={driver._id?.$oid || 'unknown'}
-                  className={`driver-item ${selectedDriver && selectedDriver._id?.$oid === driver._id?.$oid ? 'selected' : ''}`}
+                  key={driver.id}
                   onClick={() => handleDriverClick(driver)}
+                  style={{
+                    padding: '15px',
+                    borderBottom: '1px solid #ecf0f1',
+                    cursor: 'pointer',
+                    backgroundColor: selectedDriver?.id === driver.id ? '#e3f2fd' : 'white',
+                    transition: 'background-color 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedDriver?.id !== driver.id) {
+                      e.currentTarget.style.backgroundColor = '#f8f9fa';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedDriver?.id !== driver.id) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
                 >
-                  <div className="driver-photo">
-                    <img 
-                      src="/api/placeholder/80/80" 
-                      alt={driver.name || '기사'} 
-                      onError={(e) => {
-                        e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='%23ccc'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z'/%3E%3C/svg%3E";
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2c3e50' }}>
+                          {driver.name}
+                        </span>
+                        <span style={{
+                          marginLeft: '10px',
+                          padding: '2px 8px',
+                          backgroundColor: '#27ae60',
+                          color: 'white',
+                          borderRadius: '12px',
+                          fontSize: '12px'
+                        }}>
+                          DRIVER
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '3px' }}>
+                        🏢 {getCompanyDisplay(driver.organizationId)}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '3px' }}>
+                        🎫 기사번호: {generateDriverNumber(driver)}
+                      </div>
+                      <div style={{ fontSize: '14px', color: '#7f8c8d' }}>
+                        🚗 면허: {driver.licenseType || '정보 없음'}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteDriver(driver);
+                      }} 
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#e74c3c',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
                       }}
-                    />
+                    >
+                      🗑️ 삭제
+                    </button>
                   </div>
-                  <div className="driver-info">
-                    <h3>{driver.name || '이름 없음'}</h3>
-                    <p>{getCompanyDisplay(driver.organizationId)} | 기사번호: {getDriverNumber(driver)}</p>
-                    <p>면허: {driver.licenseType || '정보 없음'}</p>
-                  </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDriver(driver);
-                    }} 
-                    className="delete-button"
-                  >
-                    삭제
-                  </button>
                 </div>
               ))
             )}
           </div>
         </div>
         
-        <div className="detail-section">
+        {/* 우측 상세 정보 */}
+        <div style={{ 
+          flex: '1.5', 
+          backgroundColor: '#fff', 
+          borderRadius: '10px', 
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+          padding: '20px'
+        }}>
           {selectedDriver ? (
-            <div className="driver-details">
-              <div className="detail-header">
-                <h2>버스 기사 상세 정보</h2>
+            <div style={{ height: '100%', overflowY: 'auto' }}>
+              <div style={{ marginBottom: '25px' }}>
+                <h2 style={{ margin: 0, color: '#34495e', marginBottom: '5px' }}>
+                  🧑‍💼 {selectedDriver.name} 기사 상세 정보
+                </h2>
+                <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px' }}>
+                  마지막 업데이트: {new Date().toLocaleString()}
+                </p>
               </div>
-              <div className="detail-grid">
-                <div className="driver-photo-large">
-                  <img 
-                    src="/api/placeholder/150/150" 
-                    alt={selectedDriver.name || '기사'} 
-                    onError={(e) => {
-                      e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 24 24' fill='%23ccc'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z'/%3E%3C/svg%3E";
-                    }}
-                  />
-                </div>
-                <div className="detail-info">
-                  <div className="detail-section-title">기본 정보</div>
-                  <div className="detail-row">
-                    <label>이름:</label>
-                    <span>{selectedDriver.name || '정보 없음'}</span>
+              
+              {/* 기본 정보 카드 */}
+              <div style={{
+                backgroundColor: '#f8f9fa',
+                padding: '20px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>👤 기본 정보</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>이름:</label>
+                    <div style={{ marginTop: '5px' }}>{selectedDriver.name}</div>
                   </div>
-                  <div className="detail-row">
-                    <label>생년월일:</label>
-                    <span>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>생년월일:</label>
+                    <div style={{ marginTop: '5px' }}>
                       {selectedDriver.birthDate ? 
                         `${formatBirthDate(selectedDriver.birthDate)} (${calculateAge(selectedDriver.birthDate)}세)` : 
                         '정보 없음'}
-                    </span>
+                    </div>
                   </div>
-                  <div className="detail-row">
-                    <label>성별:</label>
-                    <span>{getGenderFromIdentity(selectedDriver.identity)}</span>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>성별:</label>
+                    <div style={{ marginTop: '5px' }}>{getGenderFromIdentity(selectedDriver.identity)}</div>
                   </div>
-                  <div className="detail-row">
-                    <label>전화번호:</label>
-                    <span>{selectedDriver.phoneNumber || '정보 없음'}</span>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>전화번호:</label>
+                    <div style={{ marginTop: '5px' }}>{selectedDriver.phoneNumber || '정보 없음'}</div>
                   </div>
-                  <div className="detail-row">
-                    <label>이메일:</label>
-                    <span>{selectedDriver.email || '정보 없음'}</span>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>이메일:</label>
+                    <div style={{ marginTop: '5px' }}>{selectedDriver.email}</div>
                   </div>
-                  <div className="detail-row">
-                    <label>소속 회사:</label>
-                    <span>{getCompanyDisplay(selectedDriver.organizationId)}</span>
-                  </div>
-                  <div className="detail-row">
-                    <label>기사 번호:</label>
-                    <span>{getDriverNumber(selectedDriver)}</span>
-                  </div>
-                  
-                  <div className="detail-section-title">면허 정보</div>
-                  <div className="detail-row">
-                    <label>면허 종류:</label>
-                    <span>{selectedDriver.licenseType || '정보 없음'}</span>
-                  </div>
-                  <div className="detail-row">
-                    <label>면허 번호:</label>
-                    <span>{selectedDriver.licenseNumber || '정보 없음'}</span>
-                  </div>
-                  <div className="detail-row">
-                    <label>면허 시리얼:</label>
-                    <span>{selectedDriver.licenseSerial || '정보 없음'}</span>
-                  </div>
-                  <div className="detail-row">
-                    <label>면허 만료일:</label>
-                    <span>
-                      {selectedDriver.licenseExpiryDate ? 
-                        `${selectedDriver.licenseExpiryDate} (${getLicenseStatus(selectedDriver.licenseExpiryDate)})` : 
-                        '정보 없음'}
-                    </span>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>소속 회사:</label>
+                    <div style={{ marginTop: '5px' }}>{getCompanyDisplay(selectedDriver.organizationId)}</div>
                   </div>
                 </div>
               </div>
               
-              <div className="driving-records">
-                <h3>운행 기록</h3>
+              {/* 면허 정보 카드 */}
+              <div style={{
+                backgroundColor: '#fff3cd',
+                padding: '20px',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>🚗 면허 정보</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>면허 종류:</label>
+                    <div style={{ marginTop: '5px' }}>{selectedDriver.licenseType || '정보 없음'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>면허 번호:</label>
+                    <div style={{ marginTop: '5px' }}>{selectedDriver.licenseNumber || '정보 없음'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>면허 시리얼:</label>
+                    <div style={{ marginTop: '5px' }}>{selectedDriver.licenseSerial || '정보 없음'}</div>
+                  </div>
+                  <div>
+                    <label style={{ fontWeight: 'bold', color: '#34495e' }}>면허 만료일:</label>
+                    <div style={{ marginTop: '5px' }}>
+                      {selectedDriver.licenseExpiryDate ? 
+                        `${selectedDriver.licenseExpiryDate} (${getLicenseStatus(selectedDriver.licenseExpiryDate).message})` : 
+                        '정보 없음'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 운행 기록 카드 */}
+              <div style={{
+                backgroundColor: '#d1ecf1',
+                padding: '20px',
+                borderRadius: '8px'
+              }}>
+                <h3 style={{ margin: '0 0 15px 0', color: '#2c3e50' }}>📊 최근 운행 기록</h3>
                 {driverOperationPlans.length > 0 ? (
-                  <table className="records-table">
-                    <thead>
-                      <tr>
-                        <th>날짜</th>
-                        <th>버스 번호</th>
-                        <th>노선</th>
-                        <th>운행 시작 시간</th>
-                        <th>운행 종료 시간</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {driverOperationPlans.slice(0, 10).map((record, index) => (
-                        <tr key={index}>
-                          <td>{record.date}</td>
-                          <td>{record.busNumber}</td>
-                          <td>{record.route}</td>
-                          <td>{record.startTime}</td>
-                          <td>{record.endTime}</td>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      backgroundColor: 'white',
+                      borderRadius: '5px',
+                      overflow: 'hidden'
+                    }}>
+                      <thead style={{ backgroundColor: '#34495e', color: 'white' }}>
+                        <tr>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>날짜</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>버스 번호</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>노선</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>시작</th>
+                          <th style={{ padding: '12px', textAlign: 'left' }}>종료</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {driverOperationPlans.slice(0, 5).map((record, index) => (
+                          <tr key={index} style={{
+                            borderBottom: '1px solid #ecf0f1',
+                            backgroundColor: index % 2 === 0 ? '#f8f9fa' : 'white'
+                          }}>
+                            <td style={{ padding: '10px' }}>{record.date}</td>
+                            <td style={{ padding: '10px' }}>{record.busNumber}</td>
+                            <td style={{ padding: '10px' }}>{record.route}</td>
+                            <td style={{ padding: '10px' }}>{record.startTime}</td>
+                            <td style={{ padding: '10px' }}>{record.endTime}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {driverOperationPlans.length > 5 && (
+                      <p style={{ 
+                        textAlign: 'center', 
+                        marginTop: '10px', 
+                        color: '#7f8c8d',
+                        fontSize: '14px'
+                      }}>
+                        최근 5개 기록만 표시됩니다. (총 {driverOperationPlans.length}개 기록)
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  <p>운행 기록이 없습니다.</p>
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '40px',
+                    color: '#95a5a6',
+                    backgroundColor: 'white',
+                    borderRadius: '5px'
+                  }}>
+                    📭 운행 기록이 없습니다.
+                  </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="no-selection">
-              <p>좌측 목록에서 버스 기사를 선택하세요.</p>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '100%',
+              color: '#95a5a6'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '20px' }}>🚌</div>
+              <div style={{ fontSize: '18px', marginBottom: '10px' }}>기사를 선택해주세요</div>
+              <div style={{ fontSize: '14px' }}>좌측 목록에서 버스 기사를 클릭하면 상세 정보를 볼 수 있습니다</div>
             </div>
           )}
         </div>
