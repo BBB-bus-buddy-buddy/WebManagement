@@ -243,7 +243,7 @@ function UserManagement() {
       <div className="management-container">
         <div className="list-section">
           <div className="list-header">
-            <h2>이용자 목록</h2>
+            <span>이용자 목록</span>
             <div className="search-container">
               <input
                 type="text"

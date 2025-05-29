@@ -441,130 +441,328 @@ static convertToServerFormat(appData, drivers, buses, routes) {
 }
 // api.js에 추가할 버스 관련 메서드
   
-  // ==================== 버스 관련 메서드 (수정됨) ====================
+// ==================== 버스 관련 메서드 (실제 서버 구조 기반) ====================
 
 /**
- * 모든 버스 조회
+ * 모든 버스 조회 - 실제 서버 응답 구조에 맞게 수정
  * @returns {Promise<Array>} 버스 목록
  */
+/**
+ * 모든 버스 조회 - 일관된 응답 구조로 수정
+ * @returns {Promise<Object>} 버스 목록이 담긴 응답 객체
+ */
 static async getAllBuses() {
-  const data = await ApiService.apiRequest('bus');
-  return data;
+  try {
+    const response = await ApiService.apiRequest('bus');
+    console.log('===== 버스 API 원본 응답 =====');
+    console.log(response);
+    console.log('===========================');
+    
+    let busData = [];
+    
+    // 다양한 응답 구조 처리
+    if (response) {
+      // 케이스 1: response.data가 배열인 경우
+      if (response.data && Array.isArray(response.data)) {
+        console.log('케이스 1: response.data 배열');
+        busData = response.data;
+      }
+      // 케이스 2: response 자체가 배열인 경우
+      else if (Array.isArray(response)) {
+        console.log('케이스 2: response 자체가 배열');
+        busData = response;
+      }
+      // 케이스 3: response가 단일 객체인 경우
+      else if (response.busNumber || response.id) {
+        console.log('케이스 3: response 단일 객체');
+        busData = [response];
+      }
+    }
+    
+    // 실제 서버 응답 구조 그대로 사용 (최소한의 정규화만)
+    const normalizedBuses = busData.map(bus => {
+      const normalizedBus = {
+        // 기본 식별자
+        id: bus.id || bus._id || bus.busNumber,
+        busNumber: bus.busNumber, // 서버 필드명 그대로
+        busRealNumber: bus.busRealNumber, // 서버 필드명 그대로
+        
+        // 노선 정보
+        routeName: bus.routeName, // 서버에서 직접 제공
+        routeId: bus.routeId, // 수정 시 필요
+        
+        // 좌석 정보
+        totalSeats: Number(bus.totalSeats || 45),
+        availableSeats: Number(bus.availableSeats || bus.totalSeats || 45),
+        occupiedSeats: Number(bus.occupiedSeats || 0),
+        
+        // 운행 상태 정보 (서버 필드명 그대로)
+        operate: Boolean(bus.operate), // 현재 운행중 여부
+        currentStationIndex: bus.currentStationIndex || 0,
+        currentStationName: bus.currentStationName || '알 수 없음',
+        totalStations: bus.totalStations || 0,
+        
+        // 위치 정보
+        latitude: bus.latitude || null,
+        longitude: bus.longitude || null,
+        
+        // 시스템 정보 (상세보기에서만 사용)
+        lastUpdateTime: bus.lastUpdateTime,
+        organizationId: bus.organizationId, // 조직명 변환에 사용
+        
+        // 추가 메타데이터
+        createdAt: bus.createdAt || bus.created_at,
+        updatedAt: bus.updatedAt || bus.updated_at
+      };
+      
+      console.log('정규화된 버스 데이터:', normalizedBus);
+      return normalizedBus;
+    });
+    
+    console.log(`총 ${normalizedBuses.length}개의 버스 데이터 처리 완료`);
+    
+    // 일관된 응답 구조로 반환 (다른 API들과 동일한 형태)
+    return {
+      data: normalizedBuses,
+      message: response.message || '버스 목록을 가져왔습니다.'
+    };
+  } catch (error) {
+    console.error('버스 조회 실패:', error);
+    throw error;
+  }
 }
 
 /**
- * 특정 버스 조회
- * @param {string} busNumber 조회할 버스 번호
- * @returns {Promise<Object>} 버스 정보
- */
-static async getBus(busNumber) {
-  const data = await ApiService.apiRequest(`bus/${busNumber}`);
-  return data;
-}
-
-/**
- * 버스 좌석 정보 조회
- * @param {string} busNumber 조회할 버스 번호
- * @returns {Promise<Object>} 버스 좌석 정보
- */
-static async getBusSeats(busNumber) {
-  const data = await ApiService.apiRequest(`bus/seats/${busNumber}`);
-  return data;
-}
-
-/**
- * 버스 위치 정보 조회
- * @param {string} busNumber 조회할 버스 번호
- * @returns {Promise<Object>} 버스 위치 정보
- */
-static async getBusLocation(busNumber) {
-  const data = await ApiService.apiRequest(`bus/location/${busNumber}`);
-  return data;
-}
-
-/**
- * 버스 추가 (관리자 권한 필요) - 수정된 버전
- * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": "45" }
+ * 버스 추가 - 실제 서버 스펙에 맞게 수정 (routeId, totalSeats만)
  * @param {Object} busData 추가할 버스 데이터
  * @returns {Promise<Object>} 추가된 버스 정보
  */
 static async addBus(busData) {
   try {
-    console.log('버스 추가 API 요청 데이터:', busData);
+    console.log('===== 버스 추가 요청 시작 =====');
+    console.log('원본 데이터:', busData);
     
-    // API 스펙에 맞게 데이터 구성
+    // 필수 데이터 검증
+    if (!busData.routeId) {
+      throw new Error('노선을 선택해주세요.');
+    }
+    if (!busData.totalSeats || busData.totalSeats <= 0) {
+      throw new Error('올바른 좌석 수를 입력해주세요.');
+    }
+    
+    // 실제 서버 API 스펙에 맞는 요청 데이터 구성 (최소한만)
     const requestData = {
-      busNumber: busData.busNumber,
-      routeId: busData.routeId,
-      totalSeats: busData.totalSeats.toString() // 문자열로 변환
+      routeId: String(busData.routeId), // 노선 ID (필수)
+      totalSeats: Number(busData.totalSeats) // 좌석 수 (필수)
+      // operate, lastUpdateTime, organizationId, busNumber 등은 서버에서 자동 생성/관리
     };
     
     console.log('최종 요청 데이터:', requestData);
     
     const response = await ApiService.apiRequest('bus', 'POST', requestData);
-    console.log('버스 추가 응답:', response);
+    console.log('서버 응답:', response);
     
-    return response;
+    // 응답 처리
+    if (response) {
+      const result = {
+        success: true,
+        busNumber: response.data || response.busNumber || response.id,
+        message: response.message || '버스가 성공적으로 등록되었습니다.',
+        fullResponse: response
+      };
+      
+      console.log('처리된 결과:', result);
+      console.log('===== 버스 추가 요청 완료 =====');
+      
+      return result;
+    }
+    
+    throw new Error('서버 응답이 올바르지 않습니다.');
+    
   } catch (error) {
-    console.error('버스 추가 중 오류:', error);
+    console.error('===== 버스 추가 실패 =====');
+    console.error('오류:', error);
     throw error;
   }
 }
 
 /**
- * 버스 수정 - 수정된 버전
- * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": 45 }
+ * 버스 수정 - 실제 서버 스펙에 맞게 수정 (busNumber, routeId, totalSeats만)
  * @param {Object} busData 수정할 버스 데이터
  * @returns {Promise<Object>} 수정된 버스 정보
  */
 static async updateBus(busData) {
   try {
-    console.log('버스 수정 API 요청 데이터:', busData);
+    console.log('===== 버스 수정 요청 시작 =====');
+    console.log('원본 데이터:', busData);
     
-    // API 스펙에 맞게 데이터 구성
+    // 필수 데이터 검증
+    if (!busData.busNumber) {
+      throw new Error('버스 번호가 필요합니다.');
+    }
+    if (!busData.routeId) {
+      throw new Error('노선을 선택해주세요.');
+    }
+    if (!busData.totalSeats || busData.totalSeats <= 0) {
+      throw new Error('올바른 좌석 수를 입력해주세요.');
+    }
+    
+    // 실제 서버 API 스펙에 맞는 요청 데이터 구성 (최소한만)
     const requestData = {
-      busNumber: busData.busNumber,
-      routeId: busData.routeId,
-      totalSeats: Number(busData.totalSeats) // 숫자로 변환
+      busNumber: String(busData.busNumber), // 버스 식별자 (필수, 변경 불가)
+      routeId: String(busData.routeId), // 노선 정보 (수정 가능)
+      totalSeats: Number(busData.totalSeats) // 좌석 정보 (수정 가능)
+      // operate, lastUpdateTime, organizationId 등은 서버에서 자동 관리
     };
     
     console.log('최종 요청 데이터:', requestData);
     
     const response = await ApiService.apiRequest('bus', 'PUT', requestData);
-    console.log('버스 수정 응답:', response);
+    console.log('서버 응답:', response);
     
-    return response;
+    // 응답 처리
+    if (response) {
+      const result = {
+        success: true,
+        message: response.message || '버스 정보가 성공적으로 수정되었습니다.',
+        updatedBus: {
+          busNumber: busData.busNumber,
+          ...requestData
+        },
+        fullResponse: response
+      };
+      
+      console.log('처리된 결과:', result);
+      console.log('===== 버스 수정 요청 완료 =====');
+      
+      return result;
+    }
+    
+    throw new Error('서버 응답이 올바르지 않습니다.');
+    
   } catch (error) {
-    console.error('버스 수정 중 오류:', error);
+    console.error('===== 버스 수정 실패 =====');
+    console.error('오류:', error);
     throw error;
   }
 }
 
 /**
- * 버스 삭제
+ * 특정 버스 조회 - 완전한 정보 포함
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 정보
+ */
+static async getBus(busNumber) {
+  try {
+    console.log(`버스 상세 조회: ${busNumber}`);
+    const response = await ApiService.apiRequest(`bus/${busNumber}`);
+    
+    // 단일 버스 데이터도 동일한 방식으로 정규화
+    if (response) {
+      const bus = response.data || response;
+      return {
+        id: bus.id || bus._id || bus.busNumber,
+        busNumber: bus.busNumber,
+        busRealNumber: bus.busRealNumber,
+        routeId: bus.routeId,
+        routeName: bus.routeName,
+        totalSeats: Number(bus.totalSeats || 45),
+        availableSeats: Number(bus.availableSeats || bus.totalSeats || 45),
+        occupiedSeats: Number(bus.occupiedSeats || 0),
+        operate: Boolean(bus.operate),
+        currentStationIndex: bus.currentStationIndex || 0,
+        currentStationName: bus.currentStationName || '알 수 없음',
+        totalStations: bus.totalStations || 0,
+        latitude: bus.latitude || null,
+        longitude: bus.longitude || null,
+        lastUpdateTime: bus.lastUpdateTime,
+        organizationId: bus.organizationId,
+        createdAt: bus.createdAt,
+        updatedAt: bus.updatedAt
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error(`버스 ${busNumber} 조회 실패:`, error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 삭제 - 로깅 개선
  * @param {string} busNumber 삭제할 버스 번호
  * @returns {Promise<Object>} 삭제 결과
  */
 static async deleteBus(busNumber) {
   try {
-    console.log('버스 삭제 요청:', busNumber);
+    console.log(`===== 버스 삭제 요청: ${busNumber} =====`);
     const response = await ApiService.apiRequest(`bus/${busNumber}`, 'DELETE');
-    console.log('버스 삭제 응답:', response);
+    console.log('삭제 응답:', response);
+    console.log('===== 버스 삭제 완료 =====');
     return response;
   } catch (error) {
-    console.error('버스 삭제 중 오류:', error);
+    console.error(`===== 버스 ${busNumber} 삭제 실패 =====`);
+    console.error('오류:', error);
     throw error;
   }
 }
+
+/**
+ * 디버깅을 위한 데이터 검증 헬퍼 메서드
+ */
+static validateBusData(busData) {
+  const issues = [];
+  
+  if (!busData.busNumber) issues.push('버스 번호가 없습니다');
+  if (!busData.totalSeats) issues.push('좌석 수가 없습니다');
+  if (!busData.routeName && !busData.routeId) issues.push('노선 정보가 없습니다');
+  
+  if (issues.length > 0) {
+    console.warn('버스 데이터 문제:', issues, busData);
+  }
+  
+  return issues.length === 0;
+}
+
+
+
+
   // ==================== 노선 관련 메서드 ====================
   /**
-   * 모든 노선 조회
-   * @returns {Promise<Array>} 노선 목록
-   */
-  static async getAllRoutes() {
-    const data = await ApiService.apiRequest('routes');
-    return data;
+ * 모든 노선 조회 - 응답 데이터 구조 개선
+ * @returns {Promise<Array>} 노선 목록
+ */
+static async getAllRoutes() {
+  try {
+    const response = await ApiService.apiRequest('routes');
+    console.log('원본 노선 API 응답:', response);
+    
+    if (response && response.data) {
+      // 노선 데이터 정규화
+      const normalizedRoutes = response.data.map(route => {
+        const routeData = {
+          id: route.id || route._id, // 노선 ID
+          routeName: route.routeName || route.name || route.title, // 노선명
+          stations: route.stations || [] // 정류장 목록
+        };
+        
+        console.log('정규화된 노선 데이터:', routeData);
+        return routeData;
+      });
+      
+      return {
+        data: normalizedRoutes,
+        message: response.message || '노선 목록을 가져왔습니다.'
+      };
+    }
+    
+    return { data: [], message: '노선 데이터가 없습니다.' };
+  } catch (error) {
+    console.error('노선 조회 실패:', error);
+    throw error;
   }
+}
   
   /**
    * 노선명으로 노선 검색
@@ -977,142 +1175,205 @@ static async getDriverOperationPlans(driverName, options = {}) {
   }
 }
 
-// ==================== 버스 운행 계획 관련 메서드 (NEW API) ====================
-  
-  /**
-   * 버스 운행 일정 추가
-   * @param {Object} operationPlanData OperationPlanDTO 데이터
-   * @returns {Promise<Object>} 추가된 운행 일정 정보
-   */
-  static async addOperationPlan(operationPlanData) {
-    try {
-      console.log('운행 일정 추가 요청:', operationPlanData);
-      const data = await ApiService.apiRequest('operation-plan', 'POST', operationPlanData);
-      return data;
-    } catch (error) {
-      console.error('운행 일정 추가 실패:', error);
-      throw error;
+/**
+ * 운행 일정 추가 - 데이터 검증 강화
+ */
+static async addOperationPlan(operationPlanData) {
+  try {
+    console.log('운행 일정 추가 요청 (원본):', operationPlanData);
+    
+    // 필수 데이터 검증
+    if (!operationPlanData.busId) {
+      throw new Error('버스 ID가 필요합니다.');
     }
+    if (!operationPlanData.driverId) {
+      throw new Error('기사 ID가 필요합니다.');
+    }
+    if (!operationPlanData.operationDate) {
+      throw new Error('운행 날짜가 필요합니다.');
+    }
+    
+    // 요청 데이터를 백엔드 DTO 형식에 맞게 변환
+    const requestData = {
+      busId: String(operationPlanData.busId), // 문자열로 변환
+      busNumber: operationPlanData.busNumber || '', // 버스 번호
+      driverId: String(operationPlanData.driverId), // 문자열로 변환
+      routeId: operationPlanData.routeId ? String(operationPlanData.routeId) : '', // 노선 ID
+      operationDate: operationPlanData.operationDate, // YYYY-MM-DD 형식
+      startTime: operationPlanData.startTime || '08:00', // HH:MM 형식
+      endTime: operationPlanData.endTime || '17:00', // HH:MM 형식
+      isRecurring: Boolean(operationPlanData.isRecurring), // 불린 값으로 변환
+      recurringWeeks: operationPlanData.recurringWeeks || null
+    };
+    
+    console.log('최종 요청 데이터:', requestData);
+    
+    const response = await ApiService.apiRequest('operation-plan', 'POST', requestData);
+    return response;
+  } catch (error) {
+    console.error('운행 일정 추가 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 운행 일정 일별 조회
+ */
+static async getOperationPlansByDate(date) {
+  try {
+    const dateStr = typeof date === 'string' ? date : ApiService.formatDate(date);
+    console.log('일별 운행 일정 조회 요청:', dateStr);
+    
+    const data = await ApiService.apiRequest(`operation-plan/${dateStr}`);
+    return data;
+  } catch (error) {
+    console.error('일별 운행 일정 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 운행 일정 오늘자 조회
+ */
+static async getTodayOperationPlans() {
+  try {
+    console.log('오늘 운행 일정 조회');
+    const data = await ApiService.apiRequest('operation-plan/today');
+    return data;
+  } catch (error) {
+    console.error('오늘 운행 일정 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 운행 일정 주별 조회
+ */
+static async getWeeklyOperationPlans(startDate = null) {
+  try {
+    console.log('주별 운행 일정 조회:', startDate);
+    let endpoint = 'operation-plan/weekly';
+    if (startDate) {
+      endpoint += `?startDate=${startDate}`;
+    }
+    const data = await ApiService.apiRequest(endpoint);
+    return data;
+  } catch (error) {
+    console.error('주별 운행 일정 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 운행 일정 월별 조회
+ */
+static async getMonthlyOperationPlans(yearMonth = null) {
+  try {
+    console.log('월별 운행 일정 조회:', yearMonth);
+    let endpoint = 'operation-plan/monthly';
+    if (yearMonth) {
+      endpoint += `?yearMonth=${yearMonth}`;
+    }
+    const data = await ApiService.apiRequest(endpoint);
+    return data;
+  } catch (error) {
+    console.error('월별 운행 일정 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 특정 버스 운행 일정 상세 조회
+ */
+static async getOperationPlanDetail(id) {
+  try {
+    console.log('운행 일정 상세 조회:', id);
+    const data = await ApiService.apiRequest(`operation-plan/detail/${id}`);
+    return data;
+  } catch (error) {
+    console.error('운행 일정 상세 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 운행 일정 삭제
+ */
+static async deleteOperationPlan(id) {
+  try {
+    console.log('운행 일정 삭제:', id);
+    const data = await ApiService.apiRequest(`operation-plan/${id}`, 'DELETE');
+    return data;
+  } catch (error) {
+    console.error('운행 일정 삭제 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 운행 일정 수정 - 데이터 검증 강화
+ */
+static async updateOperationPlan(operationPlanData) {
+  try {
+    console.log('운행 일정 수정 요청 (원본):', operationPlanData);
+    
+    // 필수 데이터 검증
+    if (!operationPlanData.id) {
+      throw new Error('운행 일정 ID가 필요합니다.');
+    }
+    
+    // 요청 데이터를 백엔드 DTO 형식에 맞게 변환
+    const requestData = {
+      id: String(operationPlanData.id),
+      busId: String(operationPlanData.busId),
+      busNumber: operationPlanData.busNumber || '',
+      driverId: String(operationPlanData.driverId),
+      routeId: operationPlanData.routeId ? String(operationPlanData.routeId) : '',
+      operationDate: operationPlanData.operationDate, // YYYY-MM-DD 형식
+      startTime: operationPlanData.startTime || '08:00', // HH:MM 형식
+      endTime: operationPlanData.endTime || '17:00', // HH:MM 형식
+      status: operationPlanData.status || 'SCHEDULED'
+    };
+    
+    console.log('최종 수정 요청 데이터:', requestData);
+    
+    const response = await ApiService.apiRequest('operation-plan', 'PUT', requestData);
+    return response;
+  } catch (error) {
+    console.error('운행 일정 수정 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 디버깅을 위한 데이터 검증 헬퍼 메서드
+ */
+static validateBusData(busData) {
+  const issues = [];
+  
+  if (!busData.id) issues.push('ID가 없습니다');
+  if (!busData.busNumber) issues.push('버스 번호가 없습니다');
+  if (!busData.totalSeats) issues.push('좌석 수가 없습니다');
+  
+  if (issues.length > 0) {
+    console.warn('버스 데이터 문제:', issues, busData);
   }
   
-  /**
-   * 버스 운행 일정 일별 조회
-   * @param {string} date 조회할 날짜 (YYYY-MM-DD 형식)
-   * @returns {Promise<Object>} 해당 날짜의 운행 일정 목록
-   */
-  static async getOperationPlansByDate(date) {
-    try {
-      console.log('일별 운행 일정 조회:', date);
-      const data = await ApiService.apiRequest(`operation-plan/${date}`);
-      return data;
-    } catch (error) {
-      console.error('일별 운행 일정 조회 실패:', error);
-      throw error;
-    }
+  return issues.length === 0;
+}
+
+static validateRouteData(routeData) {
+  const issues = [];
+  
+  if (!routeData.id) issues.push('ID가 없습니다');
+  if (!routeData.routeName) issues.push('노선명이 없습니다');
+  
+  if (issues.length > 0) {
+    console.warn('노선 데이터 문제:', issues, routeData);
   }
   
-  /**
-   * 버스 운행 일정 오늘자 조회
-   * @returns {Promise<Object>} 오늘의 운행 일정 목록
-   */
-  static async getTodayOperationPlans() {
-    try {
-      console.log('오늘 운행 일정 조회');
-      const data = await ApiService.apiRequest('operation-plan/today');
-      return data;
-    } catch (error) {
-      console.error('오늘 운행 일정 조회 실패:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * 버스 운행 일정 주별 조회
-   * @param {string} startDate 주 시작 날짜 (선택사항)
-   * @returns {Promise<Object>} 주간 운행 일정 목록
-   */
-  static async getWeeklyOperationPlans(startDate = null) {
-    try {
-      console.log('주별 운행 일정 조회:', startDate);
-      let endpoint = 'operation-plan/weekly';
-      if (startDate) {
-        endpoint += `?startDate=${startDate}`;
-      }
-      const data = await ApiService.apiRequest(endpoint);
-      return data;
-    } catch (error) {
-      console.error('주별 운행 일정 조회 실패:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * 버스 운행 일정 월별 조회
-   * @param {string} yearMonth 년월 (YYYY-MM 형식, 선택사항)
-   * @returns {Promise<Object>} 월간 운행 일정 목록
-   */
-  static async getMonthlyOperationPlans(yearMonth = null) {
-    try {
-      console.log('월별 운행 일정 조회:', yearMonth);
-      let endpoint = 'operation-plan/monthly';
-      if (yearMonth) {
-        endpoint += `?yearMonth=${yearMonth}`;
-      }
-      const data = await ApiService.apiRequest(endpoint);
-      return data;
-    } catch (error) {
-      console.error('월별 운행 일정 조회 실패:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * 특정 버스 운행 일정 상세 조회
-   * @param {string} id 운행 일정 ID
-   * @returns {Promise<Object>} 운행 일정 상세 정보
-   */
-  static async getOperationPlanDetail(id) {
-    try {
-      console.log('운행 일정 상세 조회:', id);
-      const data = await ApiService.apiRequest(`operation-plan/detail/${id}`);
-      return data;
-    } catch (error) {
-      console.error('운행 일정 상세 조회 실패:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * 버스 운행 일정 삭제
-   * @param {string} id 삭제할 운행 일정 ID
-   * @returns {Promise<Object>} 삭제 결과
-   */
-  static async deleteOperationPlan(id) {
-    try {
-      console.log('운행 일정 삭제:', id);
-      const data = await ApiService.apiRequest(`operation-plan/${id}`, 'DELETE');
-      return data;
-    } catch (error) {
-      console.error('운행 일정 삭제 실패:', error);
-      throw error;
-    }
-  }
-  
-  /**
-   * 버스 운행 일정 수정
-   * @param {Object} operationPlanData OperationPlanDTO 데이터 (ID 포함)
-   * @returns {Promise<Object>} 수정된 운행 일정 정보
-   */
-  static async updateOperationPlan(operationPlanData) {
-    try {
-      console.log('운행 일정 수정 요청:', operationPlanData);
-      const data = await ApiService.apiRequest('operation-plan', 'PUT', operationPlanData);
-      return data;
-    } catch (error) {
-      console.error('운행 일정 수정 실패:', error);
-      throw error;
-    }
-  }
+  return issues.length === 0;
+}
 }
 
 export default ApiService;

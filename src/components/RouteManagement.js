@@ -1432,7 +1432,7 @@ const fetchStations = async () => {
           {/* 왼쪽 목록 영역 */}
           <div className="list-section">
             <div className="list-header">
-              <h2>노선 목록</h2>
+              <span>노선 목록</span>
               <div className="search-container">
                 <input
                   type="text"
@@ -1515,18 +1515,10 @@ const fetchStations = async () => {
                     <div className="map-info" style={{
                       marginBottom: '10px',
                       padding: '10px',
-                      backgroundColor: '#e3f2fd',
                       borderRadius: '4px',
                       fontSize: '14px',
                       color: '#1976d2'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>🗺️</span>
-                        <span><strong>실제 도로를 따라 연결된 경로</strong>가 표시됩니다.</span>
-                      </div>
-                      <div style={{ marginTop: '5px', fontSize: '13px', color: '#666' }}>
-                        • 파란색 실선: 내비게이션 경로 | 주황색 점선: 추정 경로
-                      </div>
                     </div>
                     <div 
                       ref={detailMapRef} 

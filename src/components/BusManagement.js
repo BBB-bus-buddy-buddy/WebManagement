@@ -1,4 +1,4 @@
-// components/BusManagement.js
+// components/BusManagement.js - 실제 서버 구조에 맞게 수정
 import React, { useState, useEffect } from 'react';
 import ApiService from '../services/api';
 import '../styles/Management.css';
@@ -13,30 +13,16 @@ function BusManagement() {
   const [error, setError] = useState(null);
   const [routes, setRoutes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [organizationNames, setOrganizationNames] = useState({}); // 조직 ID별 조직명 캐시
   const [editBus, setEditBus] = useState({
     busNumber: '',
     routeId: '',
-    totalSeats: 45,
-    serviceStatus: 'NOT_IN_SERVICE'
+    totalSeats: 45
   });
   const [newBus, setNewBus] = useState({
     routeId: '',
-    totalSeats: 45,
-    serviceStatus: 'NOT_IN_SERVICE'
+    totalSeats: 45
   });
-
-  // 상태 옵션들
-  const operationalStatusOptions = [
-    { value: 'ACTIVE', label: '활성' },
-    { value: 'INACTIVE', label: '비활성' },
-    { value: 'MAINTENANCE', label: '정비중' }
-  ];
-
-  const serviceStatusOptions = [
-    { value: 'IN_SERVICE', label: '운행중' },
-    { value: 'NOT_IN_SERVICE', label: '운행 대기' },
-    { value: 'OUT_OF_SERVICE', label: '운행 종료' }
-  ];
 
   // 컴포넌트 마운트 시 버스 데이터와 노선 데이터 불러오기
   useEffect(() => {
@@ -45,50 +31,41 @@ function BusManagement() {
     fetchRoutes();
   }, []);
 
-  // 버스 목록 불러오기 (새 API 스펙에 맞게 수정)
+  // 선택된 버스가 변경될 때마다 해당 조직명 가져오기
+  useEffect(() => {
+    if (selectedBus && selectedBus.organizationId && !organizationNames[selectedBus.organizationId]) {
+      fetchOrganizationName(selectedBus.organizationId);
+    }
+  }, [selectedBus]);
+
+  // 버스 목록 불러오기
   const fetchBuses = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await ApiService.getAllBuses();
-      console.log('버스 API 응답 데이터:', response);
+      console.log('===== 버스 목록 조회 시작 =====');
+      const busData = await ApiService.getAllBuses();
       
-      let busData = [];
-      
-      // 새 API 응답 구조 처리
-      if (response) {
-        // 케이스 1: response.data가 배열인 경우
-        if (response.data && Array.isArray(response.data)) {
-          console.log('케이스 1: response.data 배열');
-          busData = response.data;
-        }
-        // 케이스 2: response 자체가 배열인 경우
-        else if (Array.isArray(response)) {
-          console.log('케이스 2: response 자체가 배열');
-          busData = response;
-        }
-        // 케이스 3: response가 단일 객체인 경우
-        else if (response.busNumber) {
-          console.log('케이스 3: response 단일 객체');
-          busData = [response];
-        }
-      }
-      
-      console.log('파싱된 버스 데이터:', busData);
-      console.log('버스 데이터 개수:', busData.length);
+      console.log('받아온 버스 데이터:', busData);
+      console.log('버스 개수:', busData.length);
       
       if (busData.length > 0) {
-        console.log('첫 번째 버스 데이터 샘플:', busData[0]);
+        console.log('첫 번째 버스 샘플:', busData[0]);
+        
+        // 각 버스의 조직명을 미리 가져와서 캐시
+        const uniqueOrgIds = [...new Set(busData.map(bus => bus.organizationId).filter(Boolean))];
+        console.log('조직 ID 목록:', uniqueOrgIds);
+        
+        // 모든 조직명을 병렬로 가져오기
+        await Promise.all(uniqueOrgIds.map(orgId => fetchOrganizationName(orgId)));
       }
       
       setBuses(busData);
+      console.log('===== 버스 목록 조회 완료 =====');
       
-      if (busData.length === 0) {
-        console.error('응답 데이터 형식이 예상과 다르거나 데이터가 없습니다:', response);
-        setError('버스 데이터를 찾을 수 없습니다.');
-      }
     } catch (err) {
-      console.error('Error fetching buses:', err);
+      console.error('===== 버스 목록 조회 실패 =====');
+      console.error('오류:', err);
       setError(`버스 정보를 불러오는데 실패했습니다: ${err.message}`);
       setBuses([]);
     } finally {
@@ -116,27 +93,121 @@ function BusManagement() {
     }
   };
 
+  // 조직명 가져오기 (Header.js 방식 참고 - 실제 API 사용)
+  const fetchOrganizationName = async (organizationId) => {
+    if (!organizationId) return '알 수 없는 조직';
+    
+    // 이미 캐시된 조직명이 있으면 사용
+    if (organizationNames[organizationId]) {
+      return organizationNames[organizationId];
+    }
+    
+    try {
+      // Header.js와 동일한 방식으로 조직 정보 조회
+      const response = await ApiService.verifyOrganization(organizationId);
+      
+      if (response && response.data && response.data.name) {
+        // 조직명을 캐시에 저장
+        setOrganizationNames(prev => ({
+          ...prev,
+          [organizationId]: response.data.name
+        }));
+        return response.data.name;
+      } else {
+        // 조직명을 찾을 수 없는 경우 조직 ID 그대로 사용
+        setOrganizationNames(prev => ({
+          ...prev,
+          [organizationId]: organizationId
+        }));
+        return organizationId;
+      }
+    } catch (error) {
+      console.error('조직 정보 조회 실패:', error);
+      // 오류 발생 시 조직 ID 그대로 사용
+      setOrganizationNames(prev => ({
+        ...prev,
+        [organizationId]: organizationId
+      }));
+      return organizationId;
+    }
+  };
 
+  // 동기 방식으로 조직명 반환 (캐시된 값만)
+  const getOrganizationName = (organizationId) => {
+    return organizationNames[organizationId] || organizationId || '알 수 없는 조직';
+  };
 
+  // 운행 상태 라벨 가져오기
+  const getOperateStatusLabel = (operate) => {
+    return operate ? '운행중' : '운행 중지';
+  };
 
+  // 마지막 업데이트 시간 포맷팅
+  const formatLastUpdateTime = (timestamp) => {
+    if (!timestamp) return '정보 없음';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch (error) {
+      return '유효하지 않은 시간';
+    }
+  };
 
+  // 노선 이름 찾기 유틸리티 함수
+  const getRouteName = (bus) => {
+    // 1순위: 버스 객체에 직접 포함된 routeName
+    if (bus.routeName) {
+      return bus.routeName;
+    }
+    
+    // 2순위: routeId로 routes 배열에서 찾기
+    if (bus.routeId && routes.length > 0) {
+      const route = routes.find(r => r.id === bus.routeId);
+      return route ? (route.routeName || route.name) : '노선 정보 없음';
+    }
+    
+    // 3순위: 기본값
+    return '노선 정보 없음';
+  };
+
+  const getRouteNameById = (routeId) => {
+    if (routeId && routes.length > 0) {
+      const route = routes.find(r => r.id === routeId);
+      return route ? (route.routeName || route.name) : '알 수 없는 노선';
+    }
+    return '노선 정보 없음';
+  };
+
+  // 버스 클릭 핸들러
   const handleBusClick = (bus) => {
     setSelectedBus(bus);
     setShowAddForm(false);
     setShowEditForm(false);
   };
 
+  // 새 버스 추가 클릭 시
   const handleAddBusClick = () => {
     setSelectedBus(null);
     setShowAddForm(true);
     setShowEditForm(false);
-    setNewBus({
+    
+    const initialBusData = {
       routeId: routes.length > 0 ? routes[0].id : '',
-      totalSeats: 45,
-      serviceStatus: 'NOT_IN_SERVICE'
-    });
+      totalSeats: 45
+    };
+    
+    console.log('새 버스 등록 초기 데이터:', initialBusData);
+    setNewBus(initialBusData);
   };
 
+  // 버스 삭제
   const handleDeleteBus = async (busNumber) => {
     if (window.confirm('정말로 이 버스를 삭제하시겠습니까?')) {
       try {
@@ -153,13 +224,16 @@ function BusManagement() {
     }
   };
 
+  // 수정용 입력 필드 변경 처리
   const handleBusInputChange = (e) => {
     const { name, value } = e.target;
     
     let processedValue = value;
     if (name === 'totalSeats') {
-      processedValue = parseInt(value) || 45;
+      processedValue = parseInt(value) || 0;
     }
+    
+    console.log(`수정 버스 필드 변경: ${name} = ${processedValue}`);
     
     setEditBus({
       ...editBus,
@@ -167,13 +241,16 @@ function BusManagement() {
     });
   };
 
+  // 새 버스용 입력 필드 변경 처리
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
     let processedValue = value;
     if (name === 'totalSeats') {
-      processedValue = parseInt(value) || 45;
+      processedValue = parseInt(value) || 0;
     }
+    
+    console.log(`새 버스 필드 변경: ${name} = ${processedValue}`);
     
     setNewBus({
       ...newBus,
@@ -181,39 +258,77 @@ function BusManagement() {
     });
   };
 
-  // 버스 등록 (새 API 스펙에 맞게 수정)
+  // 버스 등록 (실제 서버 스펙에 맞게 수정)
   const handleAddBus = async (e) => {
     e.preventDefault();
     
     try {
-      console.log('보내는 데이터:', newBus);
-      const response = await ApiService.addBus(newBus);
+      console.log('===== 버스 등록 시작 =====');
+      console.log('폼 데이터:', newBus);
       
-      if (response) {
-        console.log('저장된 버스 데이터:', response);
-        fetchBuses(); // 버스 목록 새로고침
+      // 클라이언트 검증
+      if (!newBus.routeId) {
+        alert('노선을 선택해주세요.');
+        return;
+      }
+      if (!newBus.totalSeats || newBus.totalSeats <= 0) {
+        alert('올바른 좌석 수를 입력해주세요.');
+        return;
+      }
+      
+      // 버스 데이터 구성 (서버 스펙에 맞게)
+      const busDataToAdd = {
+        routeId: newBus.routeId,
+        totalSeats: Number(newBus.totalSeats)
+      };
+      
+      console.log('전송할 데이터:', busDataToAdd);
+      
+      const response = await ApiService.addBus(busDataToAdd);
+      
+      if (response && response.success) {
+        console.log('버스 등록 성공:', response);
+        
+        // 버스 목록 새로고침
+        await fetchBuses();
+        
+        // 폼 초기화
         setShowAddForm(false);
-        alert('버스가 성공적으로 등록되었습니다.');
+        setNewBus({
+          routeId: routes.length > 0 ? routes[0].id : '',
+          totalSeats: 45
+        });
+        
+        // 성공 메시지
+        const busNumber = response.busNumber || '알 수 없음';
+        alert(`버스가 성공적으로 등록되었습니다!\n버스 번호: ${busNumber}\n노선: ${getRouteNameById(newBus.routeId)}\n좌석 수: ${newBus.totalSeats}석`);
+        
+        console.log('===== 버스 등록 완료 =====');
       }
     } catch (err) {
-      console.error('Error adding bus:', err);
-      if (err.message && err.message.includes('ADMIN ROLE')) {
+      console.error('===== 버스 등록 실패 =====');
+      console.error('오류:', err);
+      
+      if (err.message && err.message.includes('ADMIN')) {
         alert('버스 등록에 실패했습니다. 관리자 권한이 필요합니다.');
       } else {
-        alert('버스 등록에 실패했습니다.');
+        alert(`버스 등록에 실패했습니다: ${err.message}`);
       }
     }
   };
 
+  // 수정 버튼 클릭 시
   const handleEditBusClick = () => {
     if (selectedBus) {
+      console.log('수정할 버스 선택:', selectedBus);
+      
       const busToEdit = {
         busNumber: selectedBus.busNumber,
         routeId: selectedBus.routeId || '',
-        totalSeats: selectedBus.totalSeats || 45,
-        serviceStatus: selectedBus.serviceStatus || 'NOT_IN_SERVICE'
+        totalSeats: selectedBus.totalSeats || 45
       };
       
+      console.log('수정 폼에 설정할 데이터:', busToEdit);
       setEditBus(busToEdit);
       setShowEditForm(true);
     } else {
@@ -221,56 +336,64 @@ function BusManagement() {
     }
   };
 
-  // 버스 수정 (새 API 스펙에 맞게 수정)
+  // 버스 수정 (실제 서버 스펙에 맞게 수정)
   const handleUpdateBus = async (e) => {
     e.preventDefault();
     
     try {
-      console.log('업데이트 데이터:', editBus);
-      const response = await ApiService.updateBus(editBus);
+      console.log('===== 버스 수정 시작 =====');
+      console.log('수정할 데이터:', editBus);
       
-      if (response) {
-        // 업데이트 성공 후 버스 목록 새로고침
-        fetchBuses();
+      // 클라이언트 검증
+      if (!editBus.busNumber) {
+        alert('버스 번호가 필요합니다.');
+        return;
+      }
+      if (!editBus.routeId) {
+        alert('노선을 선택해주세요.');
+        return;
+      }
+      if (!editBus.totalSeats || editBus.totalSeats <= 0) {
+        alert('올바른 좌석 수를 입력해주세요.');
+        return;
+      }
+      
+      // 버스 수정 데이터 구성 (서버 스펙에 맞게)
+      const busDataToUpdate = {
+        busNumber: editBus.busNumber,
+        routeId: editBus.routeId,
+        totalSeats: Number(editBus.totalSeats)
+      };
+      
+      console.log('전송할 수정 데이터:', busDataToUpdate);
+      
+      const response = await ApiService.updateBus(busDataToUpdate);
+      
+      if (response && response.success) {
+        console.log('버스 수정 성공:', response);
+        
+        // 버스 목록 새로고침
+        await fetchBuses();
+        
         // 선택된 버스 정보 업데이트
         const updatedBus = buses.find(bus => bus.busNumber === editBus.busNumber);
         if (updatedBus) {
-          setSelectedBus({ ...updatedBus, ...editBus });
+          setSelectedBus({ ...updatedBus, ...busDataToUpdate });
         }
+        
+        // 수정 폼 닫기
         setShowEditForm(false);
-        alert('버스 정보가 성공적으로 수정되었습니다.');
+        
+        // 성공 메시지
+        alert(`버스 정보가 성공적으로 수정되었습니다!\n버스 번호: ${editBus.busNumber}\n노선: ${getRouteNameById(editBus.routeId)}\n좌석 수: ${editBus.totalSeats}석`);
+        
+        console.log('===== 버스 수정 완료 =====');
       }
     } catch (err) {
-      console.error('Error updating bus:', err);
-      alert('버스 정보 수정에 실패했습니다.');
+      console.error('===== 버스 수정 실패 =====');
+      console.error('오류:', err);
+      alert(`버스 정보 수정에 실패했습니다: ${err.message}`);
     }
-  };
-
-  // 노선 이름 찾기 (새 API에서는 routeName이 직접 포함됨)
-  const getRouteName = (bus) => {
-    // 새 API 응답에 routeName이 직접 포함되어 있음
-    if (bus.routeName) {
-      return bus.routeName;
-    }
-    
-    // 백업: routeId로 노선 이름 찾기
-    if (bus.routeId) {
-      const route = routes.find(r => r.id === bus.routeId);
-      return route ? (route.routeName || route.name) : bus.routeId;
-    }
-    
-    return '정보 없음';
-  };
-
-  // 상태 라벨 가져오기
-  const getOperationalStatusLabel = (status) => {
-    const option = operationalStatusOptions.find(opt => opt.value === status);
-    return option ? option.label : status;
-  };
-
-  const getServiceStatusLabel = (status) => {
-    const option = serviceStatusOptions.find(opt => opt.value === status);
-    return option ? option.label : status;
   };
 
   return (
@@ -390,51 +513,78 @@ function BusManagement() {
                   <div className="detail-info">
                     <div className="detail-row">
                       <label>버스 번호:</label>
-                      <span>{selectedBus.busNumber}</span>
+                      <span className="detail-value">{selectedBus.busNumber}</span>
                     </div>
                     <div className="detail-row">
-                      <label>실제 버스 번호:</label>
-                      <span>{selectedBus.busRealNumber || '정보 없음'}</span>
+                      <label>운행 노선:</label>
+                      <span className="detail-value highlight">
+                        {getRouteName(selectedBus)}
+                      </span>
                     </div>
                     <div className="detail-row">
-                      <label>노선:</label>
-                      <span>{getRouteName(selectedBus)}</span>
+                      <label>총 좌석 수:</label>
+                      <span className="detail-value">
+                        <strong>{selectedBus.totalSeats || '정보 없음'}</strong>석
+                      </span>
                     </div>
                     <div className="detail-row">
-                      <label>총 좌석:</label>
-                      <span>{selectedBus.totalSeats || '정보 없음'}석</span>
+                      <label>현재 운행 상태:</label>
+                      <span className={`detail-value status-badge ${selectedBus.operate ? 'operating' : 'stopped'}`}>
+                        {getOperateStatusLabel(selectedBus.operate)}
+                      </span>
                     </div>
                     <div className="detail-row">
-                      <label>운영 상태:</label>
-                      <span>{getOperationalStatusLabel(selectedBus.operationalStatus)}</span>
+                      <label>소속:</label>
+                      <span className="detail-value organization">
+                        {getOrganizationName(selectedBus.organizationId)}
+                      </span>
                     </div>
                     <div className="detail-row">
-                      <label>서비스 상태:</label>
-                      <span>{getServiceStatusLabel(selectedBus.serviceStatus)}</span>
+                      <label>마지막 업데이트:</label>
+                      <span className="detail-value">
+                        {formatLastUpdateTime(selectedBus.lastUpdateTime)}
+                      </span>
                     </div>
+                  </div>
+                  <div className="detail-actions">
+                    <button 
+                      onClick={() => {
+                        if (window.confirm(`정말로 버스 ${selectedBus.busNumber}를 삭제하시겠습니까?`)) {
+                          handleDeleteBus(selectedBus.busNumber);
+                        }
+                      }}
+                      className="delete-button"
+                    >
+                      버스 삭제
+                    </button>
                   </div>
                 </div>
               ) : (
                 <div className="edit-bus-form">
                   <h3>버스 정보 수정</h3>
+                  <div className="form-notice">
+                    <p>※ 버스 번호, 운행 상태, 조직 정보, 위치 정보는 시스템에서 자동으로 관리되며 수정할 수 없습니다.</p>
+                  </div>
                   <form onSubmit={handleUpdateBus} className="bus-form">
                     <div className="form-group">
-                      <label htmlFor="busNumber">버스 번호</label>
+                      <label htmlFor="edit-busNumber">버스 번호</label>
                       <input 
                         type="text" 
-                        id="busNumber" 
+                        id="edit-busNumber" 
                         name="busNumber" 
                         value={editBus.busNumber} 
                         onChange={handleBusInputChange} 
                         required 
                         readOnly
+                        style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
                       />
                       <small className="form-hint">버스 번호는 변경할 수 없습니다.</small>
                     </div>
+                    
                     <div className="form-group">
-                      <label htmlFor="routeId">노선</label>
+                      <label htmlFor="edit-routeId">운행 노선 *</label>
                       <select 
-                        id="routeId" 
+                        id="edit-routeId" 
                         name="routeId" 
                         value={editBus.routeId} 
                         onChange={handleBusInputChange} 
@@ -442,15 +592,19 @@ function BusManagement() {
                       >
                         <option value="">노선을 선택하세요</option>
                         {routes.map(route => (
-                          <option key={route.id} value={route.id}>{route.routeName || route.name}</option>
+                          <option key={route.id} value={route.id}>
+                            {route.routeName || route.name}
+                          </option>
                         ))}
                       </select>
+                      <small className="form-hint">현재 선택된 노선: {getRouteNameById(editBus.routeId)}</small>
                     </div>
+                    
                     <div className="form-group">
-                      <label htmlFor="totalSeats">총 좌석</label>
+                      <label htmlFor="edit-totalSeats">총 좌석 수 *</label>
                       <input 
                         type="number" 
-                        id="totalSeats" 
+                        id="edit-totalSeats" 
                         name="totalSeats" 
                         min="1"
                         max="100"
@@ -458,30 +612,15 @@ function BusManagement() {
                         onChange={handleBusInputChange} 
                         required 
                       />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="serviceStatus">서비스 상태</label>
-                      <select 
-                        id="serviceStatus" 
-                        name="serviceStatus" 
-                        value={editBus.serviceStatus} 
-                        onChange={handleBusInputChange} 
-                        required
-                      >
-                        {serviceStatusOptions.map(option => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
+                      <small className="form-hint">1~100 사이의 숫자를 입력하세요.</small>
                     </div>
                     
                     <div className="form-actions">
-                      <button type="submit" className="save-button">저장</button>
+                      <button type="submit" className="save-button">수정 완료</button>
                       <button 
                         type="button" 
                         className="cancel-button"
-                        onClick={() => {
-                          setShowEditForm(false);
-                        }}
+                        onClick={() => setShowEditForm(false)}
                       >
                         취소
                       </button>
@@ -494,8 +633,13 @@ function BusManagement() {
             <div className="add-bus-form">
               <h2>새 버스 등록</h2>
               <form onSubmit={handleAddBus} className="bus-form">
+                <div className="form-notice">
+                  <p>※ 버스 번호는 시스템에서 자동으로 생성됩니다.</p>
+                  <p>※ 운행 상태, 조직 정보, 위치 정보는 시스템에서 자동으로 관리됩니다.</p>
+                </div>
+                
                 <div className="form-group">
-                  <label htmlFor="routeId">노선</label>
+                  <label htmlFor="routeId">운행 노선 *</label>
                   <select 
                     id="routeId" 
                     name="routeId" 
@@ -505,12 +649,16 @@ function BusManagement() {
                   >
                     <option value="">노선을 선택하세요</option>
                     {routes.map(route => (
-                      <option key={route.id} value={route.id}>{route.routeName || route.name}</option>
+                      <option key={route.id} value={route.id}>
+                        {route.routeName || route.name}
+                      </option>
                     ))}
                   </select>
+                  <small className="form-hint">버스가 운행할 노선을 선택하세요.</small>
                 </div>
+                
                 <div className="form-group">
-                  <label htmlFor="totalSeats">총 좌석</label>
+                  <label htmlFor="totalSeats">총 좌석 수 *</label>
                   <input
                     type="number"
                     id="totalSeats"
@@ -520,21 +668,9 @@ function BusManagement() {
                     value={newBus.totalSeats}
                     onChange={handleInputChange}
                     required
+                    placeholder="예: 45"
                   />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="serviceStatus">서비스 상태</label>
-                  <select 
-                    id="serviceStatus" 
-                    name="serviceStatus" 
-                    value={newBus.serviceStatus} 
-                    onChange={handleInputChange} 
-                    required
-                  >
-                    {serviceStatusOptions.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
+                  <small className="form-hint">1~100 사이의 숫자를 입력하세요.</small>
                 </div>
                 
                 <div className="form-actions">
@@ -560,6 +696,58 @@ function BusManagement() {
           )}
         </div>
       </div>
+      
+      {/* 인라인 스타일 */}
+      <style jsx>{`
+        .detail-value.highlight {
+          color: #1976d2;
+          font-weight: 600;
+        }
+        
+        .detail-value.organization {
+          color: #4caf50;
+          font-weight: 600;
+        }
+        
+        .status-badge {
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 0.9em;
+          font-weight: 500;
+        }
+        
+        .status-badge.operating {
+          background-color: #e8f5e8;
+          color: #2e7d32;
+        }
+        
+        .status-badge.stopped {
+          background-color: #ffebee;
+          color: #d32f2f;
+        }
+        
+        .form-hint {
+          display: block;
+          margin-top: 4px;
+          color: #666;
+          font-size: 0.85em;
+        }
+        
+        .detail-actions {
+          margin-top: 20px;
+          padding-top: 20px;
+          border-top: 1px solid #eee;
+        }
+        
+        .form-notice {
+          background-color: #e3f2fd;
+          border: 1px solid #2196f3;
+          border-radius: 4px;
+          padding: 10px;
+          margin-bottom: 20px;
+          color: #1976d2;
+        }
+      `}</style>
     </div>
   );
 }

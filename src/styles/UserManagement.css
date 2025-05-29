@@ -69,8 +69,9 @@
   background-color: #fafafa;
 }
 
-.list-header h2 {
-  margin: 0 0 15px 0;
+.list-header span {
+  font-weight: bold;
+  margin-top: 10px;
   font-size: 18px;
   color: #333;
 }
@@ -78,10 +79,11 @@
 /* 검색 컨테이너 */
 .search-container {
   margin-top: 10px;
+  margin-right: 80px;
 }
 
 .search-input {
-  width: 100%;
+  width: 110%;
   padding: 10px 15px;
   border: 1px solid #ddd;
   border-radius: 4px;

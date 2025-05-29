@@ -52,8 +52,8 @@
   align-items: center;
 }
 
-.list-header h2 {
-  margin: 0;
+.list-header span {
+  margin-right: 2em;
   font-size: 18px;
   color: #333;
 }

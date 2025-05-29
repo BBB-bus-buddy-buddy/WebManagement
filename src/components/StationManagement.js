@@ -595,7 +595,7 @@ const renderStationForm = (isEdit = false) => {
     <div className="management-container">
       <div className="list-section">
         <div className="list-header">
-          <h4 style={{marginRight: '10px'}}>정류장 목록</h4>
+          <h2>정류장 목록</h2>
           <div className="search-bar">
             <input
               type="text"
