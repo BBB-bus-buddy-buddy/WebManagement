@@ -1,92 +1,169 @@
 /* styles/UserManagement.css */
+
+/* 기본 컨테이너 스타일 */
 .user-management {
-  padding: 20px;
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
 }
 
-.user-management h1 {
+.management-header {
+  background-color: #fff;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+
+.management-header h1 {
+  margin: 0;
+  color: #333;
   font-size: 24px;
-  margin-bottom: 20px;
+}
+
+/* 에러 및 로딩 메시지 */
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px 20px;
+  margin: 10px 20px;
+  border-radius: 4px;
+  border-left: 4px solid #c62828;
+}
+
+.loading-message {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  padding: 12px 20px;
+  margin: 10px 20px;
+  border-radius: 4px;
+  border-left: 4px solid #1565c0;
+}
+
+/* 메인 컨테이너 */
+.management-container {
+  flex: 1;
+  display: flex;
+  margin: 20px;
+  gap: 20px;
+  height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+/* 좌측 리스트 섹션 */
+.list-section {
+  width: 400px;
+  min-width: 350px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 리스트 헤더 */
+.list-header {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #fafafa;
+}
+
+.list-header span {
+  font-weight: bold;
+  margin-top: 10px;
+  font-size: 18px;
   color: #333;
 }
 
-.management-container {
-  display: flex;
-  gap: 20px;
-  height: calc(100vh - 140px);
-}
-
-/* 왼쪽 목록 영역 */
-.list-section {
-  flex: 1;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  max-width: 400px;
-}
-
-.list-header {
-  padding: 15px;
-  background-color: #f9f9f9;
-  border-bottom: 1px solid #ddd;
-}
-
-.list-header h2 {
-  font-size: 18px;
-  margin-bottom: 10px;
-}
-
+/* 검색 컨테이너 */
 .search-container {
   margin-top: 10px;
+  margin-right: 80px;
 }
 
 .search-input {
-  width: 100%;
-  padding: 8px 12px;
+  width: 110%;
+  padding: 10px 15px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
+.search-input:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+/* 사용자 목록 */
 .user-list {
   flex: 1;
   overflow-y: auto;
-  padding: 10px;
+  overflow-x: hidden;
 }
 
+/* 스크롤바 스타일 */
+.user-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.user-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.user-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.user-list::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* 사용자 항목 */
 .user-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  margin-bottom: 10px;
-  border: 1px solid #eee;
-  border-radius: 4px;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+}
+
+.user-item:last-child {
+  border-bottom: none;
 }
 
 .user-item:hover {
-  background-color: #f5f5f5;
+  background-color: #f8f9fa;
 }
 
 .user-item.selected {
-  background-color: #e6f7ff;
-  border-color: #91d5ff;
+  background-color: #e3f2fd;
+  border-left: 4px solid #1976d2;
+  padding-left: 16px;
 }
 
 .user-info {
   flex: 1;
+  margin-right: 10px;
 }
 
 .user-info h3 {
-  font-size: 16px;
   margin: 0 0 5px 0;
+  font-size: 16px;
   color: #333;
+  font-weight: 500;
+}
+
+.user-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
 }
 
 .user-actions {
@@ -95,127 +172,280 @@
 }
 
 .delete-button {
-  background-color: #ff4d4f;
+  padding: 6px 12px;
+  background-color: #f44336;
   color: white;
   border: none;
-  padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  font-size: 13px;
 }
 
 .delete-button:hover {
-  background-color: #ff7875;
+  background-color: #d32f2f;
+  transform: translateY(-1px);
 }
 
+/* 빈 목록 메시지 */
 .empty-list {
-  padding: 15px;
+  padding: 40px 20px;
   text-align: center;
-  color: #888;
+  color: #999;
+  font-size: 14px;
 }
 
-/* 오른쪽 상세 정보 영역 */
+/* 우측 상세 섹션 */
 .detail-section {
-  flex: 2;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  overflow: hidden;
+  flex: 1;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
 }
 
+/* 사용자 상세 정보 */
 .user-details {
+  padding: 30px;
   height: 100%;
   display: flex;
   flex-direction: column;
 }
 
 .detail-header {
-  padding: 15px;
-  background-color: #f9f9f9;
-  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f0f0f0;
 }
 
 .detail-header h2 {
-  font-size: 18px;
   margin: 0;
+  color: #333;
+  font-size: 22px;
 }
 
+/* 상세 정보 표시 */
 .detail-info {
-  flex: 1;
+  background-color: #f8f9fa;
   padding: 20px;
-  overflow-y: auto;
+  border-radius: 8px;
+  margin-bottom: 30px;
 }
 
 .detail-row {
-  display: flex;
   margin-bottom: 15px;
+  display: flex;
+  align-items: baseline;
+}
+
+.detail-row:last-child {
+  margin-bottom: 0;
 }
 
 .detail-row label {
-  width: 120px;
-  font-weight: bold;
-  color: #555;
-}
-
-.detail-row span {
-  flex: 1;
-}
-
-.detail-section h3 {
-  margin: 20px 0 10px 0;
-  font-size: 16px;
-  color: #333;
-}
-
-.stations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.station-item {
-  background-color: #f5f5f5;
-  padding: 10px;
-  border-radius: 4px;
+  min-width: 120px;
+  color: #666;
+  font-weight: 500;
   font-size: 14px;
 }
 
+.detail-row span {
+  color: #333;
+  font-size: 14px;
+}
+
+/* 즐겨찾는 정류장 섹션 */
+.favorite-stations-section {
+  margin-top: 30px;
+}
+
+.favorite-stations-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.stations-simple-list {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.station-simple-item {
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  transition: background-color 0.2s ease;
+  word-break: break-all;
+}
+
+.station-simple-item:last-child {
+  border-bottom: none;
+}
+
+.station-simple-item:hover {
+  background-color: #f8f9fa;
+}
+
+/* 빈 정류장 상태 */
+.empty-stations {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  background: #f8f9fa;
+  border: 2px dashed #e0e0e0;
+  border-radius: 8px;
+}
+
+/* 선택 안됨 메시지 */
 .no-selection {
   display: flex;
-  align-items: center;
-  justify-content: center;
   height: 100%;
-  color: #888;
+  justify-content: center;
+  align-items: center;
+  color: #999;
   font-size: 16px;
-  padding: 20px;
   text-align: center;
+  padding: 40px;
 }
 
 /* 로딩 및 에러 상태 */
 .loading-container,
 .error-container {
   text-align: center;
-  padding: 20px;
+  padding: 60px 20px;
   margin: 50px auto;
   max-width: 500px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.loading-container h2,
+.error-container h2 {
+  margin-bottom: 15px;
+  font-size: 18px;
 }
 
 .error-container h2 {
-  color: #ff4d4f;
-  margin-bottom: 10px;
+  color: #f44336;
+}
+
+.loading-container h2 {
+  color: #1976d2;
 }
 
 .error-container button {
   margin-top: 20px;
-  background-color: #1890ff;
+  background-color: #1976d2;
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border-radius: 4px;
   cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
 }
 
 .error-container button:hover {
-  background-color: #40a9ff;
+  background-color: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 로딩 애니메이션 */
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
+  .management-container {
+    flex-direction: column;
+  }
+  
+  .list-section {
+    width: 100%;
+    height: 40%;
+    min-height: 300px;
+  }
+  
+  .detail-section {
+    height: 60%;
+  }
+}
+
+@media (max-width: 768px) {
+  .management-header {
+    padding: 15px;
+  }
+  
+  .management-header h1 {
+    font-size: 20px;
+  }
+  
+  .management-container {
+    margin: 10px;
+    gap: 10px;
+  }
+  
+  .list-header {
+    padding: 15px;
+  }
+  
+  .user-details {
+    padding: 20px;
+  }
+  
+  .station-simple-item {
+    padding: 12px 15px;
+    font-size: 13px;
+  }
+  
+  .detail-row {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .detail-row label {
+    min-width: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-item {
+    padding: 12px 15px;
+  }
+  
+  .user-info h3 {
+    font-size: 15px;
+  }
+  
+  .user-info p {
+    font-size: 12px;
+  }
+  
+  .delete-button {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
 }

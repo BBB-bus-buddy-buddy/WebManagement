@@ -1,4 +1,4 @@
-// components/UserManagement.js - 조직별 필터링 적용
+// components/UserManagement.js - 조직별 필터링 적용 (정류장 UI 개선)
 import React, { useState, useEffect } from 'react';
 import ApiService from '../services/api';
 import '../styles/UserManagement.css';
@@ -11,11 +11,101 @@ function UserManagement() {
   const [error, setError] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [organizationName, setOrganizationName] = useState('');
+  const [organizationMap, setOrganizationMap] = useState({}); // 조직 ID -> 조직명 매핑
+  const [stationMap, setStationMap] = useState({}); // 정류장 ID -> 정류장 정보 매핑
 
   // 컴포넌트 마운트 시 현재 사용자 정보와 이용자 데이터 로드
   useEffect(() => {
+    fetchOrganizationInfo();
+    fetchStations(); // 정류장 정보 미리 로드
     fetchUsers();
   }, []);
+
+  // 조직 정보 가져오기
+  const fetchOrganizationInfo = async () => {
+    try {
+      // 현재 로그인한 사용자의 조직 정보 가져오기
+      const response = await ApiService.getCurrentOrganization();
+      
+      if (response && response.data && response.data.name) {
+        setOrganizationName(response.data.name);
+        // 조직 매핑에 추가
+        if (response.data.id || response.data.organizationId) {
+          setOrganizationMap(prev => ({
+            ...prev,
+            [response.data.id || response.data.organizationId]: response.data.name
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('조직 정보 조회 실패:', error);
+    }
+  };
+
+  // 정류장 정보 미리 로드
+  const fetchStations = async () => {
+    try {
+      const response = await ApiService.getOrganizationStations();
+      
+      if (response && response.data && Array.isArray(response.data)) {
+        const stations = {};
+        response.data.forEach(station => {
+          const stationId = station._id || station.id;
+          if (stationId) {
+            stations[stationId] = {
+              id: stationId,
+              name: station.name || '정류장명 없음',
+              location: station.location
+            };
+          }
+        });
+        setStationMap(stations);
+        console.log('정류장 매핑 데이터:', stations);
+      }
+    } catch (error) {
+      console.error('정류장 정보 로드 실패:', error);
+    }
+  };
+
+  // 조직 ID로 조직명 가져오기
+  const getOrganizationName = (orgId) => {
+    // 이미 매핑에 있으면 반환
+    if (organizationMap[orgId]) {
+      return organizationMap[orgId];
+    }
+    
+    // 현재 조직과 같으면 현재 조직명 반환
+    if (organizationName && orgId) {
+      return organizationName;
+    }
+    
+    // 기본 조직명 매핑 (알려진 조직들)
+    const knownOrganizations = {
+      "Uasidnw": "울산과학대학교",
+      // 필요시 다른 조직 추가
+    };
+    
+    return knownOrganizations[orgId] || orgId || '정보 없음';
+  };
+
+  // 정류장 ID로 정류장명 가져오기
+  const getStationName = (stationId) => {
+    if (!stationId) return '정보 없음';
+    
+    // 문자열인 경우 정류장명으로 간주
+    if (typeof stationId === 'string' && !stationMap[stationId]) {
+      return stationId;
+    }
+    
+    // 정류장 매핑에서 찾기
+    const station = stationMap[stationId];
+    if (station && station.name) {
+      return station.name;
+    }
+    
+    // 찾을 수 없는 경우 ID 표시 대신 알 수 없음 표시
+    return '정류장 정보 없음';
+  };
 
   // 현재 조직의 이용자 데이터만 가져오기
   const fetchUsers = async () => {
@@ -101,32 +191,31 @@ function UserManagement() {
     )
   );
 
-  // 즐겨찾기 정류장 렌더링
+  // 간단한 정류장 리스트 렌더링
   const renderMyStations = (myStations) => {
     if (!myStations || !Array.isArray(myStations) || myStations.length === 0) {
-      return <p>등록된 즐겨찾기 정류장이 없습니다.</p>;
+      return (
+        <div className="empty-stations">
+          <p>등록된 즐겨찾기 정류장이 없습니다.</p>
+        </div>
+      );
     }
 
     return (
-      <div className="stations-list">
+      <div className="stations-simple-list">
         {myStations.map((station, index) => {
           let stationName = '정류장 정보 없음';
           
           if (typeof station === 'string') {
-            stationName = station;
-          } else if (station && typeof station === 'object' && station.name) {
-            stationName = station.name;
+            stationName = getStationName(station);
           } else if (station && typeof station === 'object') {
-            if (station.id || station._id) {
-              stationName = `정류장 ID: ${station.id || station._id}`;
-            } else {
-              stationName = '정류장 정보 없음';
-            }
+            const stationId = station.id || station._id;
+            stationName = station.name || getStationName(stationId);
           }
           
           return (
-            <div key={index} className="station-item">
-              <span>{stationName}</span>
+            <div key={index} className="station-simple-item">
+              {stationName}
             </div>
           );
         })}
@@ -154,7 +243,7 @@ function UserManagement() {
       <div className="management-container">
         <div className="list-section">
           <div className="list-header">
-            <h2>이용자 목록 ({filteredUsers.length}명)</h2>
+            <span>이용자 목록</span>
             <div className="search-container">
               <input
                 type="text"
@@ -216,9 +305,9 @@ function UserManagement() {
                 </div>
                 <div className="detail-row">
                   <label>소속:</label>
-                  <span>{organizationName || selectedUser.organizationId || '정보 없음'}</span>
+                  <span>{getOrganizationName(selectedUser.organizationId)}</span>
                 </div>
-                <div className="detail-section">
+                <div className="favorite-stations-section">
                   <h3>즐겨찾는 정류장</h3>
                   {renderMyStations(selectedUser.myStations)}
                 </div>

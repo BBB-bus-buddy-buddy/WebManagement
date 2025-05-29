@@ -1,37 +1,102 @@
 // components/UserProfile.js
 import React, { useEffect, useState } from 'react';
 import '../styles/UserProfile.css';
+import ApiService from '../services/api';
 
 function UserProfile() {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // 조직 ID를 조직명으로 매핑하는 함수 (UserManagement.js 참고)
+  const getOrganizationName = (orgId) => {
+    // 기본 조직명 매핑 (알려진 조직들)
+    const knownOrganizations = {
+      "Uasidnw": "울산과학대학교",
+      // 필요시 다른 조직 추가
+    };
+    
+    return knownOrganizations[orgId] || orgId || '정보 없음';
+  };
 
   useEffect(() => {
     // 컴포넌트가 마운트될 때 사용자 정보를 가져옵니다.
     const fetchUserProfile = async () => {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        console.log('사용자 정보:', parsedUser); // 디버깅용 로그
+      try {
+        setLoading(true);
+        // 토큰에서 사용자 정보 추출
+        const tokenUser = ApiService.getCurrentUserFromToken();
+        
+        console.log('토큰에서 추출된 사용자 정보:', tokenUser);
+        
+        if (tokenUser) {
+          // API에서 가져올 데이터: 이름, 이메일, 소속 회사, 회사 코드
+          const organizationName = getOrganizationName(tokenUser.organizationId);
+          
+          setUser({
+            name: tokenUser.name || '관리자',
+            email: tokenUser.email || 'admin@busadmin.com',
+            company: organizationName,
+            companyCode: tokenUser.organizationId || 'BUS2023'
+          });
+          console.log('설정된 사용자 정보:', {
+            name: tokenUser.name,
+            email: tokenUser.email,
+            company: organizationName,
+            companyCode: tokenUser.organizationId
+          });
+        } else {
+          // 토큰이 없거나 유효하지 않은 경우 기본값 설정
+          setUser({
+            name: '관리자',
+            email: 'admin@busadmin.com',
+            company: '버스운영회사',
+            companyCode: 'BUS2023'
+          });
+        }
+      } catch (error) {
+        console.error('사용자 정보 불러오기 실패:', error);
+        setError('사용자 정보를 불러오는데 실패했습니다.');
+        // 오류 발생 시에도 기본값 설정
+        setUser({
+          name: '관리자',
+          email: 'admin@busadmin.com',
+          company: '버스운영회사',
+          companyCode: 'BUS2023'
+        });
+      } finally {
+        setLoading(false);
       }
     };
+    
     fetchUserProfile();
   }, []);
 
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.name || '관리자',
-    email: user?.email || 'admin@busadmin.com',
-    phone: user?.phoneNumber || '010-1234-5678',
-    password: '',
-    confirmPassword: '',
-    // 추가된 필드
-    birthDate: user?.birthDate || '1990-01-01',
-    company: user?.company || '버스운영회사',
-    companyCode: user?.companyCode || 'BUS2023',
-    manager: user?.manager || '김담당',
-    emergencyContact: user?.emergencyContact || '010-9876-5432'
+    name: '',
+    email: '',
+    phone: '010-1234-5678', // 더미데이터
+    company: '',
+    companyCode: '',
+    // 더미데이터로 설정되는 필드들
+    birthDate: '1990-01-01',
+    manager: '김담당',
+    emergencyContact: '010-9876-5432'
   });
+
+  // user 정보가 로드되면 formData 업데이트
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: user.name,
+        email: user.email,
+        company: user.company,
+        companyCode: user.companyCode
+      }));
+    }
+  }, [user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -41,12 +106,44 @@ function UserProfile() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // 실제 애플리케이션에서는 사용자 프로필을 업데이트하는 로직 추가
-    console.log('Updated profile data:', formData);
-    setEditMode(false);
+    try {
+      // 실제 애플리케이션에서는 사용자 프로필을 업데이트하는 API 호출
+      console.log('Updated profile data:', formData);
+      
+      // TODO: API 호출로 프로필 업데이트
+      // await ApiService.updateUserProfile(formData);
+      
+      setEditMode(false);
+      alert('프로필이 성공적으로 업데이트되었습니다.');
+    } catch (error) {
+      console.error('프로필 업데이트 실패:', error);
+      alert('프로필 업데이트에 실패했습니다.');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="user-profile">
+        <h1>내 정보 관리</h1>
+        <div className="profile-container">
+          <div className="loading">사용자 정보를 불러오는 중...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="user-profile">
+        <h1>내 정보 관리</h1>
+        <div className="profile-container">
+          <div className="error">{error}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="user-profile">
@@ -55,11 +152,6 @@ function UserProfile() {
         {!editMode ? (
           <div className="profile-details">
             <div className="profile-header">
-              <img 
-                src="/api/placeholder/150/150" 
-                alt="프로필 이미지" 
-                className="profile-image" 
-              />
               <h2>{formData.name}</h2>
             </div>
             <div className="profile-field">
@@ -74,7 +166,6 @@ function UserProfile() {
               <label>전화번호:</label>
               <span>{formData.phone}</span>
             </div>
-            {/* 추가된 필드들 */}
             <div className="profile-field">
               <label>생년월일:</label>
               <span>{formData.birthDate}</span>
@@ -101,13 +192,6 @@ function UserProfile() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="profile-form">
-            <div className="profile-header">
-              <img 
-                src="/api/placeholder/150/150" 
-                alt="프로필 이미지" 
-                className="profile-image" 
-              />
-            </div>
             <div className="form-group">
               <label htmlFor="name">이름</label>
               <input
@@ -138,7 +222,6 @@ function UserProfile() {
                 onChange={handleChange}
               />
             </div>
-            {/* 추가된 필드들 */}
             <div className="form-group">
               <label htmlFor="birthDate">생년월일</label>
               <input
@@ -156,7 +239,8 @@ function UserProfile() {
                 id="company"
                 name="company"
                 value={formData.company}
-                onChange={handleChange}
+                readOnly
+                className="readonly-input"
               />
             </div>
             <div className="form-group">
@@ -166,8 +250,7 @@ function UserProfile() {
                 id="companyCode"
                 name="companyCode"
                 value={formData.companyCode}
-                onChange={handleChange}
-                readOnly // 회사 코드는 일반적으로 변경할 수 없음
+                readOnly
                 className="readonly-input"
               />
             </div>
@@ -190,28 +273,6 @@ function UserProfile() {
                 value={formData.emergencyContact}
                 onChange={handleChange}
                 placeholder="010-0000-0000"
-              />
-            </div>
-            <div className="form-divider"></div>
-            <div className="form-section-title">비밀번호 변경</div>
-            <div className="form-group">
-              <label htmlFor="password">새 비밀번호</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="confirmPassword">비밀번호 확인</label>
-              <input
-                type="password"
-                id="confirmPassword"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
               />
             </div>
             <div className="form-actions">

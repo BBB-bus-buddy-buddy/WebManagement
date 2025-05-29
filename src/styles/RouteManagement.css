@@ -1,314 +1,597 @@
-/* RouteManagement.css */
+/* styles/RouteManagement.css */
+
+/* 기본 컨테이너 스타일 */
+.route-management {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
+}
+
+.management-header {
+  background-color: #fff;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+
+.management-header h1 {
+  margin: 0;
+  color: #333;
+  font-size: 24px;
+}
+
+/* 메인 컨테이너 */
+.management-container {
+  flex: 1;
+  display: flex;
+  margin: 20px;
+  gap: 20px;
+  height: calc(100vh - 120px);
+  overflow: hidden;
+}
+
+/* 좌측 리스트 섹션 */
+.list-section {
+  width: 400px;
+  min-width: 350px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.list-header {
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #fafafa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.list-header span {
+  margin-right: 2em;
+  font-size: 18px;
+  color: #333;
+}
+
+.add-button {
+  padding: 10px 20px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.add-button:hover {
+  background-color: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 노선 목록 */
+.route-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 스크롤바 스타일 */
+.route-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.route-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.route-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.route-list::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* 노선 항목 */
+.route-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.route-item:last-child {
+  border-bottom: none;
+}
+
+.route-item:hover {
+  background-color: #f8f9fa;
+}
+
+.route-item.selected {
+  background-color: #e3f2fd;
+  border-left: 4px solid #1976d2;
+  padding-left: 16px;
+}
+
+.route-info {
+  flex: 1;
+  margin-right: 10px;
+}
+
+.route-info h3 {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+  color: #333;
+  font-weight: 500;
+}
+
+.route-info p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.delete-button {
+  padding: 6px 12px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 13px;
+}
+
+.delete-button:hover {
+  background-color: #d32f2f;
+  transform: translateY(-1px);
+}
+
+/* 우측 상세 섹션 */
+.detail-section {
+  flex: 1;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+}
+
+/* 선택 안됨 메시지 */
+.no-selection {
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  color: #999;
+  font-size: 16px;
+  text-align: center;
+  padding: 40px;
+}
+
+/* 편집 모드 스타일 */
+.route-edit-container {
+  padding: 30px;
+}
+
+.route-edit-container h2 {
+  margin: 0 0 30px 0;
+  color: #333;
+  font-size: 22px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #1976d2;
+}
+
+/* 정류장 선택 영역 */
+.stations-section {
+  margin-top: 30px;
+}
+
+.stations-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.station-selector-toggle {
+  width: 100%;
+  padding: 12px 15px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  margin-bottom: 15px;
+}
+
+.station-selector-toggle:hover {
+  background-color: #1565c0;
+}
+
+.station-selector-toggle:before {
+  content: "🗺️";
+  margin-right: 8px;
+}
+
+/* 선택된 정류장 목록 */
+.stations-list-edit {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #fff;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.station-item-edit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.station-item-edit:last-child {
+  border-bottom: none;
+}
+
+.station-item-edit:hover {
+  background-color: #f8f9fa;
+}
+
+.station-item-edit span {
+  font-size: 14px;
+  color: #333;
+}
+
+.remove-station-button {
+  background: none;
+  border: none;
+  color: #f44336;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  font-size: 13px;
+}
+
+.remove-station-button:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+  text-decoration: underline;
+}
+
+/* 폼 액션 버튼 */
+.form-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.save-button {
+  padding: 10px 24px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.save-button:hover:not(:disabled) {
+  background-color: #388e3c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.save-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.cancel-button {
+  padding: 10px 24px;
+  background-color: #fff;
+  color: #666;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.cancel-button:hover:not(:disabled) {
+  background-color: #f5f5f5;
+  border-color: #999;
+}
+
+.cancel-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* 지도 모달 스타일 */
 .map-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  
-  .map-container {
-    width: 90%;
-    max-width: 900px;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    max-height: 90vh;
-  }
-  
-  .map-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 15px 20px;
-    background-color: #f5f5f5;
-    border-bottom: 1px solid #e0e0e0;
-  }
-  
-  .map-header h3 {
-    margin: 0;
-    font-size: 18px;
-    color: #333;
-  }
-  
-  .close-map-button {
-    background: none;
-    border: none;
-    font-size: 20px;
-    color: #666;
-    cursor: pointer;
-    padding: 5px;
-  }
-  
-  .close-map-button:hover {
-    color: #333;
-  }
-  
-  .map-instructions {
-    padding: 10px 20px;
-    background-color: #f9f9f9;
-    border-bottom: 1px solid #e0e0e0;
-  }
-  
-  .map-instructions p {
-    margin: 5px 0;
-    font-size: 14px;
-    color: #555;
-  }
-  
-  .map-view {
-    flex-grow: 1;
-    min-height: 400px;
-    max-height: 500px;
-  }
-  
-  .map-station-list {
-    padding: 15px 20px;
-    max-height: 200px;
-    overflow-y: auto;
-    background-color: #f9f9f9;
-    border-top: 1px solid #e0e0e0;
-  }
-  
-  .map-station-list h4 {
-    margin: 0 0 10px 0;
-    font-size: 16px;
-    color: #333;
-  }
-  
-  .map-station-items {
-    margin-bottom: 15px;
-  }
-  
-  .map-station-item {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    background-color: white;
-    border-radius: 4px;
-    margin-bottom: 5px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .map-station-number {
-    width: 24px;
-    height: 24px;
-    background-color: #4a90e2;
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 12px;
-    font-weight: bold;
-    margin-right: 10px;
-  }
-  
-  .map-station-name {
-    flex-grow: 1;
-    font-size: 14px;
-  }
-  
-  .map-remove-station {
-    background: none;
-    border: none;
-    color: #e74c3c;
-    cursor: pointer;
-    font-size: 12px;
-    padding: 2px 8px;
-  }
-  
-  .map-remove-station:hover {
-    text-decoration: underline;
-  }
-  
-  .map-actions {
-    display: flex;
-    justify-content: flex-end;
-  }
-  
-  .map-done-button {
-    padding: 8px 16px;
-    background-color: #4a90e2;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  
-  .map-done-button:hover {
-    background-color: #3a80d2;
-  }
-  
-  /* 정류장 선택 버튼 스타일 업데이트 */
-  .station-selector-toggle {
-    width: 100%;
-    padding: 10px;
-    background-color: #4a90e2;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .station-selector-toggle:hover {
-    background-color: #3a80d2;
-  }
-  
-  .station-selector-toggle:before {
-    content: "🗺️";
-    margin-right: 8px;
-  }
-  
-  /* 기존 컴포넌트 스타일 조정 */
-  .route-management {
-    padding: 20px;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-  
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.map-container {
+  width: 90%;
+  max-width: 900px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background-color: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.map-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.close-map-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.close-map-button:hover {
+  color: #333;
+  background-color: #e0e0e0;
+}
+
+.map-instructions {
+  padding: 15px 20px;
+  background-color: #e3f2fd;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.map-instructions p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #1565c0;
+}
+
+.map-view {
+  flex-grow: 1;
+  min-height: 400px;
+  max-height: 500px;
+}
+
+.map-station-list {
+  padding: 20px;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+}
+
+.map-station-list h4 {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.map-station-items {
+  margin-bottom: 15px;
+}
+
+.map-station-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: white;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.map-station-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+}
+
+.map-station-number {
+  width: 24px;
+  height: 24px;
+  background-color: #1976d2;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  font-weight: bold;
+  margin-right: 12px;
+}
+
+.map-station-name {
+  flex-grow: 1;
+  font-size: 14px;
+  color: #333;
+}
+
+.map-remove-station {
+  background: none;
+  border: none;
+  color: #f44336;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.map-remove-station:hover {
+  background-color: rgba(244, 67, 54, 0.1);
+  text-decoration: underline;
+}
+
+.map-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 15px 20px;
+  background-color: #fafafa;
+  border-top: 1px solid #e0e0e0;
+}
+
+.map-done-button {
+  padding: 10px 20px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.map-done-button:hover {
+  background-color: #1565c0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 빈 목록 메시지 */
+.empty-list {
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
   .management-container {
-    display: flex;
-    gap: 20px;
-    margin-top: 20px;
+    flex-direction: column;
   }
   
   .list-section {
-    flex: 1;
-    max-width: 350px;
+    width: 100%;
+    height: 40%;
+    min-height: 300px;
   }
   
   .detail-section {
-    flex: 2;
+    height: 60%;
+  }
+}
+
+@media (max-width: 768px) {
+  .management-header {
+    padding: 15px;
+  }
+  
+  .management-header h1 {
+    font-size: 20px;
+  }
+  
+  .management-container {
+    margin: 10px;
+    gap: 10px;
   }
   
   .list-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
+    padding: 15px;
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
   }
   
-  .add-button {
-    padding: 8px 16px;
-    background-color: #4a90e2;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+  .route-edit-container {
+    padding: 20px;
   }
   
-  .route-list {
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    max-height: 500px;
-    overflow-y: auto;
+  .map-container {
+    width: 95%;
+    margin: 10px;
   }
   
-  .route-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 15px;
-    border-bottom: 1px solid #e0e0e0;
-    cursor: pointer;
-    transition: background-color 0.2s;
+  .map-header {
+    padding: 15px;
   }
   
-  .route-item:last-child {
-    border-bottom: none;
+  .map-station-list {
+    padding: 15px;
   }
-  
-  .route-item:hover {
-    background-color: #f5f5f5;
-  }
-  
-  .route-item.selected {
-    background-color: #e3f2fd;
-  }
-  
-  .route-info h3 {
-    margin: 0 0 5px 0;
-    font-size: 16px;
-  }
-  
-  .route-info p {
-    margin: 0;
-    font-size: 14px;
-    color: #666;
-  }
-  
-  .delete-button {
-    background: none;
-    border: 1px solid #e74c3c;
-    color: #e74c3c;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  
-  .delete-button:hover {
-    background-color: #e74c3c;
-    color: white;
-  }
-  
-  .no-selection {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 300px;
-    background-color: #f9f9f9;
-    border-radius: 8px;
-    border: 1px dashed #ccc;
-  }
-  
-  .no-selection p {
-    color: #666;
-    font-size: 16px;
-  }
-  
-  .stations-list-edit {
-    margin-top: 10px;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    max-height: 200px;
-    overflow-y: auto;
-  }
-  
-  .station-item-edit {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid #e0e0e0;
-  }
-  
-  .station-item-edit:last-child {
-    border-bottom: none;
-  }
-  
-  .remove-station-button {
-    background: none;
-    border: none;
-    color: #e74c3c;
-    cursor: pointer;
-  }
-  
-  .remove-station-button:hover {
-    text-decoration: underline;
-  }
+}

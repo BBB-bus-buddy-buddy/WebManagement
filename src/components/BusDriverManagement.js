@@ -238,10 +238,6 @@ function BusDriverManagement() {
 
   return (
     <div className="bus-driver-management" style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ color: '#2c3e50', marginBottom: '10px' }}>🚌 버스 기사 관리</h1>
-        <p style={{ color: '#7f8c8d', margin: 0 }}>조직 내 버스 기사들의 정보를 관리합니다</p>
-      </div>
       
       {error && (
         <div style={{

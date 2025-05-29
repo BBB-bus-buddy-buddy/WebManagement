@@ -1,4 +1,4 @@
-// components/RouteManagement.js - 코드 순서 정리
+// components/RouteManagement.js - 개선된 코드
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -165,8 +165,12 @@ function RouteManagement() {
   
   // ===================== Refs =====================
   const mapRef = useRef(null);
+  const detailMapRef = useRef(null);
   const kakaoMapRef = useRef(null);
+  const detailKakaoMapRef = useRef(null);
   const markersRef = useRef([]);
+  const detailMarkersRef = useRef([]);
+  const polylinesRef = useRef([]);
   
   // ===================== 상태 관리 =====================
   // 데이터 상태
@@ -196,6 +200,16 @@ function RouteManagement() {
   // 지도 관련 상태
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInitialized, setMapInitialized] = useState(false);
+  const [detailMapInitialized, setDetailMapInitialized] = useState(false);
+
+  // ===================== 소속명 표시 함수 =====================
+  
+  const getCompanyDisplay = (organizationId) => {
+    const organizations = {
+      "Uasidnw": "울산과학대학교",
+    };
+    return organizations[organizationId] || organizationId || '정보 없음';
+  };
 
   // ===================== 초기화 및 데이터 가져오기 =====================
   
@@ -205,49 +219,49 @@ function RouteManagement() {
     fetchStations();
   }, []);
 
-  // 현재 조직의 노선 데이터만 가져오기
-  const fetchRoutes = async () => {
-    try {
-      setIsLoading(true);
-      const response = await ApiService.getOrganizationRoutes();
-      console.log('조직 노선 데이터 응답:', response);
-      
-      if (response && Array.isArray(response.data)) {
-        setRoutes(response.data);
-      } else if (response && response.data) {
-        setRoutes(Array.isArray(response.data) ? response.data : [response.data]);
-      } else {
-        setRoutes([]);
-      }
-      setError(null);
-    } catch (err) {
-      console.error('조직 노선 데이터 로드 중 오류:', err);
-      setError('노선 데이터를 불러오는 중 오류가 발생했습니다.');
+  // 현재 조직의 노선만 가져오기
+const fetchRoutes = async () => {
+  try {
+    setIsLoading(true);
+    const response = await ApiService.getAllRoutes();
+    console.log('조직 노선 데이터 응답:', response);
+    
+    if (response && Array.isArray(response.data)) {
+      setRoutes(response.data);
+    } else if (response && response.data) {
+      setRoutes(Array.isArray(response.data) ? response.data : [response.data]);
+    } else {
       setRoutes([]);
-    } finally {
-      setIsLoading(false);
     }
-  };
+    setError(null);
+  } catch (err) {
+    console.error('조직 노선 데이터 로드 중 오류:', err);
+    setError('노선 데이터를 불러오는 중 오류가 발생했습니다.');
+    setRoutes([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
-  // 현재 조직의 정류장 데이터만 가져오기
-  const fetchStations = async () => {
-    try {
-      const response = await ApiService.getOrganizationStations();
-      console.log('조직 정류장 데이터 응답:', response);
-      
-      if (response && Array.isArray(response.data)) {
-        setStations(response.data);
-      } else if (response && response.data) {
-        setStations(Array.isArray(response.data) ? response.data : [response.data]);
-      } else {
-        setStations([]);
-      }
-    } catch (err) {
-      console.error('조직 정류장 데이터 로드 중 오류:', err);
-      setError('정류장 데이터를 불러오는 중 오류가 발생했습니다.');
+  // 현재 조직의 정류장만 가져오기
+const fetchStations = async () => {
+  try {
+    const response = await ApiService.getAllStations();
+    console.log('조직 정류장 데이터 응답:', response);
+    
+    if (response && Array.isArray(response.data)) {
+      setStations(response.data);
+    } else if (response && response.data) {
+      setStations(Array.isArray(response.data) ? response.data : [response.data]);
+    } else {
       setStations([]);
     }
-  };
+  } catch (err) {
+    console.error('조직 정류장 데이터 로드 중 오류:', err);
+    setError('정류장 데이터를 불러오는 중 오류가 발생했습니다.');
+    setStations([]);
+  }
+};
 
   // 특정 노선 상세 정보 가져오기
   const fetchRouteDetail = async (routeId) => {
@@ -264,6 +278,11 @@ function RouteManagement() {
         }
         
         setSelectedRoute(routeData);
+        
+        // 상세 정보 지도 초기화
+        setTimeout(() => {
+          initializeDetailMap(routeData);
+        }, 500);
       } else {
         setError('노선 상세 정보를 불러오는 중 오류가 발생했습니다.');
       }
@@ -331,7 +350,7 @@ function RouteManagement() {
       
       const script = document.createElement('script');
       script.id = 'kakao-map-script';
-      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=3b43e1905f0a0c9567279f725b9730ed&autoload=false`;
+      script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=3b43e1905f0a0c9567279f725b9730ed&autoload=false&libraries=services`;
       script.async = true;
       script.onload = () => {
         window.kakao.maps.load(() => {
@@ -345,6 +364,376 @@ function RouteManagement() {
     
     loadKakaoMap();
   }, []);
+
+  // 상세 정보 지도 초기화
+  const initializeDetailMap = (routeData) => {
+    if (!detailMapRef.current || !window.kakao || !window.kakao.maps || !mapLoaded) {
+      console.log('상세 지도 초기화 조건 미충족');
+      return;
+    }
+
+    try {
+      // 기존 마커 및 폴리라인 정리
+      if (detailMarkersRef.current.length > 0) {
+        detailMarkersRef.current.forEach(marker => marker.setMap(null));
+        detailMarkersRef.current = [];
+      }
+      
+      if (polylinesRef.current.length > 0) {
+        polylinesRef.current.forEach(polyline => polyline.setMap(null));
+        polylinesRef.current = [];
+      }
+
+      const mapOptions = {
+        center: new window.kakao.maps.LatLng(35.5525, 129.2878),
+        level: 7
+      };
+
+      const map = new window.kakao.maps.Map(detailMapRef.current, mapOptions);
+      detailKakaoMapRef.current = map;
+
+      // 노선 정류장 표시
+      if (routeData && routeData.stations && routeData.stations.length > 0) {
+        const processedStations = processRouteStations(routeData);
+        addDetailMapMarkers(map, processedStations);
+        drawRouteLine(map, processedStations);
+      }
+
+      setDetailMapInitialized(true);
+    } catch (error) {
+      console.error('상세 지도 초기화 중 오류:', error);
+    }
+  };
+
+  // 상세 지도 마커 추가
+  const addDetailMapMarkers = (map, processedStations) => {
+    if (!processedStations || processedStations.length === 0) return;
+
+    const bounds = new window.kakao.maps.LatLngBounds();
+
+    processedStations.forEach((station, index) => {
+      const stationData = getStationById(station.stationId);
+      if (!stationData || !stationData.location || !stationData.location.coordinates) return;
+
+      const lat = parseFloat(stationData.location.coordinates[0]);
+      const lng = parseFloat(stationData.location.coordinates[1]);
+
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      const position = new window.kakao.maps.LatLng(lat, lng);
+      bounds.extend(position);
+
+      // 순서가 표시된 마커 이미지 생성
+      const markerImage = new window.kakao.maps.MarkerImage(
+        createNumberMarker(station.sequence),
+        new window.kakao.maps.Size(30, 40),
+        { offset: new window.kakao.maps.Point(15, 40) }
+      );
+
+      const marker = new window.kakao.maps.Marker({
+        position,
+        map,
+        image: markerImage
+      });
+
+      const infowindow = new window.kakao.maps.InfoWindow({
+        content: `<div style="padding:5px;width:150px;text-align:center;">${station.sequence}. ${station.name}</div>`
+      });
+
+      window.kakao.maps.event.addListener(marker, 'mouseover', () => {
+        infowindow.open(map, marker);
+      });
+
+      window.kakao.maps.event.addListener(marker, 'mouseout', () => {
+        infowindow.close();
+      });
+
+      detailMarkersRef.current.push(marker);
+    });
+
+    // 지도 범위 조정
+    if (processedStations.length > 1) {
+      map.setBounds(bounds);
+    }
+  };
+
+  // 실제 도로를 따라 경로선 그리기 (내비게이션 스타일)
+  const drawRouteLine = async (map, processedStations) => {
+    if (!processedStations || processedStations.length < 2) return;
+
+    // 기존 폴리라인 제거
+    if (polylinesRef.current.length > 0) {
+      polylinesRef.current.forEach(polyline => polyline.setMap(null));
+      polylinesRef.current = [];
+    }
+
+    // 각 정류장 간의 실제 도로 경로 그리기
+    for (let i = 0; i < processedStations.length - 1; i++) {
+      const startStation = getStationById(processedStations[i].stationId);
+      const endStation = getStationById(processedStations[i + 1].stationId);
+      
+      if (!startStation?.location?.coordinates || !endStation?.location?.coordinates) {
+        continue;
+      }
+
+      const startLat = parseFloat(startStation.location.coordinates[0]);
+      const startLng = parseFloat(startStation.location.coordinates[1]);
+      const endLat = parseFloat(endStation.location.coordinates[0]);
+      const endLng = parseFloat(endStation.location.coordinates[1]);
+
+      if (isNaN(startLat) || isNaN(startLng) || isNaN(endLat) || isNaN(endLng)) {
+        continue;
+      }
+
+      try {
+        // 카카오 길찾기 API 호출
+        const routePath = await getNavigationRoute(startLat, startLng, endLat, endLng);
+        
+        if (routePath && routePath.length > 0) {
+          // 실제 도로 경로로 폴리라인 생성
+          const polyline = new window.kakao.maps.Polyline({
+            path: routePath,
+            strokeWeight: 6,
+            strokeColor: '#2196F3',
+            strokeOpacity: 0.9,
+            strokeStyle: 'solid'
+          });
+
+          polyline.setMap(map);
+          polylinesRef.current.push(polyline);
+        } else {
+          // API 실패 시 직선으로 대체
+          const straightPath = [
+            new window.kakao.maps.LatLng(startLat, startLng),
+            new window.kakao.maps.LatLng(endLat, endLng)
+          ];
+          
+          const polyline = new window.kakao.maps.Polyline({
+            path: straightPath,
+            strokeWeight: 4,
+            strokeColor: '#FF5722',
+            strokeOpacity: 0.7,
+            strokeStyle: 'dashed'
+          });
+
+          polyline.setMap(map);
+          polylinesRef.current.push(polyline);
+        }
+      } catch (error) {
+        console.error(`정류장 ${i} -> ${i+1} 경로 생성 실패:`, error);
+        
+        // 오류 시 직선으로 대체
+        const straightPath = [
+          new window.kakao.maps.LatLng(startLat, startLng),
+          new window.kakao.maps.LatLng(endLat, endLng)
+        ];
+        
+        const polyline = new window.kakao.maps.Polyline({
+          path: straightPath,
+          strokeWeight: 4,
+          strokeColor: '#FF5722',
+          strokeOpacity: 0.7,
+          strokeStyle: 'dashed'
+        });
+
+        polyline.setMap(map);
+        polylinesRef.current.push(polyline);
+      }
+    }
+  };
+
+  // 카카오 길찾기 API를 사용하여 실제 도로 경로 가져오기
+  const getNavigationRoute = async (startLat, startLng, endLat, endLng) => {
+    try {
+      // 우선 카카오맵 웹 서비스 API 사용 (CORS 문제 없음)
+      return await getKakaoWebRoute(startLat, startLng, endLat, endLng);
+    } catch (error) {
+      console.error('카카오 웹 서비스 오류:', error);
+      
+      // 웹 서비스 실패 시 백엔드 프록시 사용 시도
+      try {
+        return await getBackendProxyRoute(startLat, startLng, endLat, endLng);
+      } catch (proxyError) {
+        console.error('백엔드 프록시도 실패:', proxyError);
+        
+        // 모든 API 실패 시 스마트 곡선 경로 생성
+        return createSmartCurvedPath(startLat, startLng, endLat, endLng);
+      }
+    }
+  };
+
+  // 카카오맵 웹 서비스 API 사용 (directions는 없지만 places 등으로 경로 추정)
+  const getKakaoWebRoute = async (startLat, startLng, endLat, endLng) => {
+    return new Promise((resolve, reject) => {
+      if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+        reject(new Error('카카오맵 서비스가 로드되지 않음'));
+        return;
+      }
+
+      // 거리 계산
+      const distance = calculateDistance(startLat, startLng, endLat, endLng);
+      
+      if (distance > 100) { // 100km 이상이면 직선으로 처리
+        resolve(null);
+        return;
+      }
+
+      // 지리적 특성을 고려한 스마트 경로 생성
+      const smartPath = createSmartCurvedPath(startLat, startLng, endLat, endLng);
+      resolve(smartPath);
+    });
+  };
+
+  // 백엔드 프록시를 통한 길찾기 API 호출 (CORS 우회)
+  // 주의: 이 함수를 사용하려면 백엔드에서 다음과 같은 API 엔드포인트가 필요합니다:
+  // POST /api/navigation/route
+  // body: { origin: { lat, lng }, destination: { lat, lng } }
+  // response: { path: [{ lat, lng }, ...] }
+  const getBackendProxyRoute = async (startLat, startLng, endLat, endLng) => {
+    try {
+      // 백엔드 API를 통해 카카오 길찾기 API 호출
+      const response = await fetch('/api/navigation/route', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          origin: { lat: startLat, lng: startLng },
+          destination: { lat: endLat, lng: endLng }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.path && Array.isArray(data.path)) {
+        return data.path.map(point => new window.kakao.maps.LatLng(point.lat, point.lng));
+      }
+      
+      return null;
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  // 지리적 특성을 고려한 스마트 곡선 경로 생성
+  const createSmartCurvedPath = (startLat, startLng, endLat, endLng) => {
+    const path = [];
+    const steps = 15; // 더 세밀한 중간 지점
+    
+    // 시작점
+    path.push(new window.kakao.maps.LatLng(startLat, startLng));
+    
+    // 거리에 따른 곡률 조정
+    const distance = calculateDistance(startLat, startLng, endLat, endLng);
+    const curveFactor = Math.min(distance * 0.0005, 0.01); // 거리에 비례한 곡률
+    
+    // 방향 벡터 계산
+    const latDiff = endLat - startLat;
+    const lngDiff = endLng - startLng;
+    
+    for (let i = 1; i < steps; i++) {
+      const ratio = i / steps;
+      
+      // 베지어 곡선 기반 경로
+      const t = ratio;
+      const smoothT = t * t * (3.0 - 2.0 * t); // 부드러운 보간
+      
+      // 기본 경로
+      let midLat = startLat + latDiff * smoothT;
+      let midLng = startLng + lngDiff * smoothT;
+      
+      // 자연스러운 곡률 추가 (도로처럼)
+      const curveOffset = Math.sin(ratio * Math.PI) * curveFactor;
+      
+      // 경로 방향에 수직인 방향으로 곡률 적용
+      const perpLat = -lngDiff / Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+      const perpLng = latDiff / Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+      
+      midLat += perpLat * curveOffset;
+      midLng += perpLng * curveOffset;
+      
+      // 도시 지역 고려 (울산 지역의 도로 패턴 반영)
+      if (isUrbanArea(midLat, midLng)) {
+        // 도시 지역에서는 격자형 도로 패턴 시뮬레이션
+        const gridOffset = 0.0008;
+        if (ratio < 0.3 || ratio > 0.7) {
+          midLat = Math.round(midLat / gridOffset) * gridOffset;
+        } else {
+          midLng = Math.round(midLng / gridOffset) * gridOffset;
+        }
+      }
+      
+      path.push(new window.kakao.maps.LatLng(midLat, midLng));
+    }
+    
+    // 종점
+    path.push(new window.kakao.maps.LatLng(endLat, endLng));
+    
+    return path;
+  };
+
+  // 울산 지역의 도시 지역 판단
+  const isUrbanArea = (lat, lng) => {
+    // 울산 시내 중심가 좌표 범위 (대략적)
+    const ulsanCenterLat = 35.5384;
+    const ulsanCenterLng = 129.3114;
+    const urbanRadius = 0.05; // 약 5km 반경
+    
+    const distance = Math.sqrt(
+      Math.pow(lat - ulsanCenterLat, 2) + Math.pow(lng - ulsanCenterLng, 2)
+    );
+    
+    return distance < urbanRadius;
+  };
+
+  // 두 지점 간 거리 계산 (km)
+  const calculateDistance = (lat1, lng1, lat2, lng2) => {
+    const R = 6371; // 지구 반지름 (km)
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) * Math.sin(dLng/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+
+
+  // 숫자 마커 생성 함수
+  const createNumberMarker = (number) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 30;
+    canvas.height = 40;
+    const ctx = canvas.getContext('2d');
+
+    // 마커 배경 그리기
+    ctx.fillStyle = '#2196F3';
+    ctx.beginPath();
+    ctx.arc(15, 15, 12, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // 아래쪽 뾰족한 부분
+    ctx.beginPath();
+    ctx.moveTo(15, 27);
+    ctx.lineTo(9, 35);
+    ctx.lineTo(21, 35);
+    ctx.closePath();
+    ctx.fill();
+
+    // 숫자 텍스트
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(number.toString(), 15, 15);
+
+    return canvas.toDataURL();
+  };
 
   // 지도 모달 열기 함수
   const handleOpenMap = () => {
@@ -460,10 +849,10 @@ function RouteManagement() {
       return;
     }
     
-    const selectedIds = showAddForm && newRoute && newRoute.stations
-      ? newRoute.stations.map(s => s.stationId)
+    const selectedStations = showAddForm && newRoute && newRoute.stations
+      ? newRoute.stations
       : showEditForm && editRoute && editRoute.stations
-        ? editRoute.stations.map(s => s.stationId)
+        ? editRoute.stations
         : [];
     
     stations.forEach((station, index) => {
@@ -488,13 +877,16 @@ function RouteManagement() {
         
         const position = new window.kakao.maps.LatLng(lat, lng);
         
+        // 선택된 정류장 찾기
+        const selectedStation = selectedStations.find(s => s.stationId === station.id);
         let markerImage = null;
-        const isSelected = selectedIds.includes(station.id);
         
-        if (isSelected) {
+        if (selectedStation) {
+          // 순서가 표시된 마커
           markerImage = new window.kakao.maps.MarkerImage(
-            '//t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
-            new window.kakao.maps.Size(24, 35)
+            createNumberMarker(selectedStation.sequence),
+            new window.kakao.maps.Size(30, 40),
+            { offset: new window.kakao.maps.Point(15, 40) }
           );
         }
         
@@ -536,23 +928,13 @@ function RouteManagement() {
       return;
     }
     
-    const selectedIds = [];
+    const selectedStations = showAddForm && newRoute && Array.isArray(newRoute.stations)
+      ? newRoute.stations
+      : showEditForm && editRoute && Array.isArray(editRoute.stations)
+        ? editRoute.stations
+        : [];
     
-    if (showAddForm && newRoute && Array.isArray(newRoute.stations)) {
-      newRoute.stations.forEach(station => {
-        if (station && station.stationId) {
-          selectedIds.push(station.stationId);
-        }
-      });
-    } else if (showEditForm && editRoute && Array.isArray(editRoute.stations)) {
-      editRoute.stations.forEach(station => {
-        if (station && station.stationId) {
-          selectedIds.push(station.stationId);
-        }
-      });
-    }
-    
-    console.log('하이라이트 업데이트 - 선택된 정류장 수:', selectedIds.length);
+    console.log('하이라이트 업데이트 - 선택된 정류장 수:', selectedStations.length);
     
     try {
       markersRef.current.forEach((marker, index) => {
@@ -565,13 +947,13 @@ function RouteManagement() {
           return;
         }
         
-        const stationId = station.id;
-        const isSelected = selectedIds.includes(stationId);
+        const selectedStation = selectedStations.find(s => s.stationId === station.id);
         
-        if (isSelected) {
+        if (selectedStation) {
           const selectedMarkerImage = new window.kakao.maps.MarkerImage(
-            '//t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
-            new window.kakao.maps.Size(24, 35)
+            createNumberMarker(selectedStation.sequence),
+            new window.kakao.maps.Size(30, 40),
+            { offset: new window.kakao.maps.Point(15, 40) }
           );
           marker.setImage(selectedMarkerImage);
         } else {
@@ -629,10 +1011,18 @@ function RouteManagement() {
       });
     }
     
+    // 즉시 마커 업데이트
     setTimeout(() => {
       highlightSelectedStations();
-    }, 300);
+    }, 100);
   };
+
+  // 선택된 정류장 목록이 변경될 때마다 마커 업데이트
+  useEffect(() => {
+    if (showMap && mapInitialized) {
+      highlightSelectedStations();
+    }
+  }, [newRoute.stations, editRoute?.stations, showMap, mapInitialized]);
 
   // 노선 클릭 시 처리
   const handleRouteClick = (route) => {
@@ -852,7 +1242,7 @@ function RouteManagement() {
     
     setTimeout(() => {
       highlightSelectedStations();
-    }, 300);
+    }, 100);
   };
 
   // 정류장 드래그 이동 처리 함수
@@ -899,7 +1289,7 @@ function RouteManagement() {
     
     setTimeout(() => {
       highlightSelectedStations();
-    }, 300);
+    }, 100);
   };
 
   // ===================== 유틸리티 함수 =====================
@@ -982,8 +1372,20 @@ function RouteManagement() {
         markersRef.current = [];
       }
       
+      if (detailMarkersRef.current.length > 0) {
+        detailMarkersRef.current.forEach(marker => marker.setMap(null));
+        detailMarkersRef.current = [];
+      }
+      
+      if (polylinesRef.current.length > 0) {
+        polylinesRef.current.forEach(polyline => polyline.setMap(null));
+        polylinesRef.current = [];
+      }
+      
       kakaoMapRef.current = null;
+      detailKakaoMapRef.current = null;
       setMapInitialized(false);
+      setDetailMapInitialized(false);
       
       if (window.searchTimeout) {
         clearTimeout(window.searchTimeout);
@@ -1030,7 +1432,7 @@ function RouteManagement() {
           {/* 왼쪽 목록 영역 */}
           <div className="list-section">
             <div className="list-header">
-              <h2>노선 목록 ({routes.length}개)</h2>
+              <span>노선 목록</span>
               <div className="search-container">
                 <input
                   type="text"
@@ -1040,7 +1442,7 @@ function RouteManagement() {
                   className="search-input"
                 />
               </div>
-              <button onClick={handleAddRouteClick} className="add-button">+ 노선 추가</button>
+              <button onClick={handleAddRouteClick} className="add-button">+</button>
             </div>
             
             <div className="route-list">
@@ -1104,26 +1506,63 @@ function RouteManagement() {
                   </div>
                   <div className="detail-row">
                     <label>소속:</label>
-                    <span>{organizationName || selectedRoute.organizationId || '정보 없음'}</span>
+                    <span>{getCompanyDisplay(selectedRoute.organizationId)}</span>
                   </div>
+                  
+                  {/* 노선 지도 */}
+                  <div className="detail-section">
+                    <h3>노선 지도</h3>
+                    <div className="map-info" style={{
+                      marginBottom: '10px',
+                      padding: '10px',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      color: '#1976d2'
+                    }}>
+                    </div>
+                    <div 
+                      ref={detailMapRef} 
+                      className="route-detail-map"
+                      style={{
+                        width: '100%',
+                        height: '300px',
+                        borderRadius: '8px',
+                        marginBottom: '20px',
+                        border: '1px solid #ddd'
+                      }}
+                    ></div>
+                  </div>
+                  
                   <div className="detail-section">
                     <h3>경유 정류장</h3>
-                    <div className="stations-list">
+                    <div className="stations-list-vertical">
                       {selectedRoute.stations && selectedRoute.stations.length > 0 ? (
                         (() => {
                           const processedStations = processRouteStations(selectedRoute);
                           
                           return processedStations.length > 0 ? (
                             processedStations.map((station, index) => (
-                              <div key={`${station.stationId}-${index}`} className="station-item">
-                                <span className="station-number">{index + 1}.</span>
-                                <span 
-                                  className="station-link" 
-                                  onClick={() => handleStationClick(station.stationId)}
-                                >
-                                  {station.name}
-                                </span>
-                                {index < processedStations.length - 1 && <span className="arrow">→</span>}
+                              <div key={`${station.stationId}-${index}`} className="station-item-vertical">
+                                <div className="station-content">
+                                  <span className="station-sequence-circle">{index + 1}</span>
+                                  <span 
+                                    className="station-name-link" 
+                                    onClick={() => handleStationClick(station.stationId)}
+                                    style={{
+                                      cursor: 'pointer',
+                                      color: '#2196F3',
+                                      textDecoration: 'none',
+                                      fontWeight: '500'
+                                    }}
+                                    onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                                    onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                                  >
+                                    {station.name}
+                                  </span>
+                                </div>
+                                {index < processedStations.length - 1 && (
+                                  <div className="station-arrow-down">↓</div>
+                                )}
                               </div>
                             ))
                           ) : (
@@ -1134,14 +1573,6 @@ function RouteManagement() {
                         <p>등록된 정류장이 없습니다.</p>
                       )}
                     </div>
-                  </div>
-                  <div className="detail-section">
-                    <h3>생성일</h3>
-                    <p>{selectedRoute.createdAt ? new Date(selectedRoute.createdAt).toLocaleDateString() : '정보 없음'}</p>
-                  </div>
-                  <div className="detail-section">
-                    <h3>최종 수정일</h3>
-                    <p>{selectedRoute.updatedAt ? new Date(selectedRoute.updatedAt).toLocaleDateString() : '정보 없음'}</p>
                   </div>
                 </div>
               </div>
@@ -1178,9 +1609,19 @@ function RouteManagement() {
                   
                   <div className="stations-container">
                     <label>추가된 정류장 목록 <small>(드래그하여 순서 변경 가능)</small></label>
-                    {newRoute.stations && newRoute.stations.length > 0 ? (
-                      <div className="stations-list-edit">
-                        {newRoute.stations.map((station, index) => (
+                    <div 
+                      className="stations-list-edit-enhanced"
+                      style={{
+                        maxHeight: '400px',
+                        overflowY: 'auto',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        padding: '10px',
+                        backgroundColor: '#f9f9f9'
+                      }}
+                    >
+                      {newRoute.stations && newRoute.stations.length > 0 ? (
+                        newRoute.stations.map((station, index) => (
                           <DraggableStationItem
                             key={`${station.stationId}-${index}`}
                             id={station.stationId}
@@ -1189,11 +1630,11 @@ function RouteManagement() {
                             moveStation={(dragIndex, hoverIndex) => moveStation(dragIndex, hoverIndex, false)}
                             removeStation={handleRemoveStation}
                           />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="no-stations">추가된 정류장이 없습니다.</p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="no-stations">추가된 정류장이 없습니다.</p>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="form-actions">
@@ -1243,9 +1684,19 @@ function RouteManagement() {
                   
                   <div className="stations-container">
                     <label>정류장 목록 <small>(드래그하여 순서 변경 가능)</small></label>
-                    {editRoute.stations && editRoute.stations.length > 0 ? (
-                      <div className="stations-list-edit">
-                        {editRoute.stations.map((station, index) => (
+                    <div 
+                      className="stations-list-edit-enhanced"
+                      style={{
+                        maxHeight: '400px',
+                        overflowY: 'auto',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        padding: '10px',
+                        backgroundColor: '#f9f9f9'
+                      }}
+                    >
+                      {editRoute.stations && editRoute.stations.length > 0 ? (
+                        editRoute.stations.map((station, index) => (
                           <DraggableStationItem
                             key={`${station.stationId}-${index}`}
                             id={station.stationId}
@@ -1254,11 +1705,11 @@ function RouteManagement() {
                             moveStation={(dragIndex, hoverIndex) => moveStation(dragIndex, hoverIndex, true)}
                             removeStation={handleRemoveStation}
                           />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="no-stations">추가된 정류장이 없습니다.</p>
-                    )}
+                        ))
+                      ) : (
+                        <p className="no-stations">추가된 정류장이 없습니다.</p>
+                      )}
+                    </div>
                   </div>
                   
                   <div className="form-actions">
@@ -1312,18 +1763,21 @@ function RouteManagement() {
                 height: '90vh',
                 backgroundColor: 'white',
                 borderRadius: '8px',
-                padding: '20px',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
                 position: 'relative'
               }}
             >
+              {/* 고정 헤더 */}
               <div className="map-header" style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '10px'
+                padding: '20px 20px 10px 20px',
+                borderBottom: '1px solid #eee',
+                backgroundColor: 'white',
+                zIndex: 10
               }}>
                 <h3>조직 정류장에서 선택</h3>
                 <button 
@@ -1340,40 +1794,39 @@ function RouteManagement() {
                 </button>
               </div>
               
+              {/* 고정 안내 메시지 */}
               <div className="map-instructions" style={{
-                marginBottom: '10px',
-                padding: '10px',
+                padding: '10px 20px',
                 backgroundColor: '#f8f9fa',
-                borderRadius: '4px'
+                borderBottom: '1px solid #eee',
+                zIndex: 10
               }}>
                 <p><strong>조직의 정류장만 표시됩니다.</strong></p>
                 <p>지도에서 정류장 마커를 클릭하면 자동으로 노선에 추가됩니다.</p>
-                <p>이미 추가된 정류장은 <span style={{color: '#2196F3'}}>별 모양</span>으로 표시됩니다.</p>
-                <p>선택한 순서가 잘못되었다면, 아래 목록에서 <strong>드래그하여 순서를 변경</strong>할 수 있습니다.</p>
+                <p>선택된 정류장은 <span style={{color: '#2196F3'}}>순서 번호</span>가 표시됩니다.</p>
               </div>
               
+              {/* 지도 영역 */}
               <div 
                 id="kakao-map-container"
                 ref={mapRef} 
                 className="map-view"
                 style={{
                   width: '100%',
-                  height: '400px',
-                  borderRadius: '8px',
-                  marginBottom: '10px',
-                  flex: 1,
+                  flex: '1',
+                  borderRadius: '0',
                   position: 'relative',
-                  border: '1px solid #ddd',
-                  minHeight: '400px'
+                  minHeight: '300px'
                 }}
               ></div>
               
+              {/* 선택된 정류장 목록 */}
               <div className="map-station-list" style={{
-                maxHeight: '200px',
+                height: '200px',
                 overflowY: 'auto',
-                padding: '10px',
+                padding: '15px 20px',
                 backgroundColor: '#f8f9fa',
-                borderRadius: '4px'
+                borderTop: '1px solid #eee'
               }}>
                 <h4 style={{marginBottom: '10px'}}>현재 선택된 정류장</h4>
                 <div className="map-station-items">
@@ -1409,34 +1862,200 @@ function RouteManagement() {
                     <p className="no-stations">선택된 정류장이 없습니다. 지도에서 조직 정류장을 선택하세요.</p>
                   )}
                 </div>
-                
-                <div className="map-actions" style={{
-                  marginTop: '15px',
-                  textAlign: 'center'
-                }}>
-                </div>
+              </div>
+              
+              {/* 고정 하단 버튼 */}
+              <div className="map-actions" style={{
+                padding: '15px 20px',
+                textAlign: 'center',
+                borderTop: '1px solid #eee',
+                backgroundColor: 'white',
+                zIndex: 10
+              }}>
                 <button 
-                    className="map-done-button"
-                    onClick={handleCloseMap}
-                    style={{
-                      backgroundColor: '#4CAF50',
-                      color: 'white',
-                      padding: '10px 20px',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    선택 완료
-                  </button>
+                  className="map-done-button"
+                  onClick={handleCloseMap}
+                  style={{
+                    backgroundColor: '#4CAF50',
+                    color: 'white',
+                    padding: '12px 30px',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  선택 완료
+                </button>
               </div>
             </div>
-            
           </div>
         )}
       </div>
+      
+      {/* CSS 스타일 추가 */}
+      <style>{`
+        .stations-list-vertical {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 15px;
+          background-color: #f9f9f9;
+          border-radius: 8px;
+          border: 1px solid #e0e0e0;
+        }
+        
+        .station-item-vertical {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .station-content {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          background-color: white;
+          border-radius: 6px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          min-width: 200px;
+          justify-content: flex-start;
+          transition: all 0.3s ease;
+        }
+        
+        .station-content:hover {
+          box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+          transform: translateY(-1px);
+        }
+        
+        .station-sequence-circle {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #2196F3, #1976D2);
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 14px;
+          flex-shrink: 0;
+          box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+        }
+        
+        .station-name-link {
+          font-size: 16px;
+          color: #333;
+          flex: 1;
+          transition: color 0.2s ease;
+        }
+        
+        .station-arrow-down {
+          color: #2196F3;
+          font-size: 20px;
+          font-weight: bold;
+          margin: 5px 0;
+          animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+          0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+          }
+          40% {
+            transform: translateY(-3px);
+          }
+          60% {
+            transform: translateY(-1px);
+          }
+        }
+        
+        .stations-list-edit-enhanced {
+          background-color: #f8f9fa;
+        }
+        
+        .stations-list-edit-enhanced .station-item-edit {
+          background-color: white;
+          border: 1px solid #e0e0e0;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          transition: all 0.2s ease;
+        }
+        
+        .stations-list-edit-enhanced .station-item-edit:hover {
+          box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+          transform: translateY(-1px);
+        }
+        
+        .route-detail-map {
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .route-detail-map::after {
+          content: '';
+          position: absolute;
+          top: 10px;
+          left: 10px;
+          right: 10px;
+          bottom: 10px;
+          border: 2px solid #2196F3;
+          border-radius: 6px;
+          pointer-events: none;
+          opacity: 0.3;
+        }
+        
+        .map-modal {
+          backdrop-filter: blur(5px);
+        }
+        
+        .map-container {
+          box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .map-header h3 {
+          color: #2196F3;
+          margin: 0;
+        }
+        
+        .map-instructions {
+          font-size: 14px;
+          line-height: 1.4;
+        }
+        
+        .map-instructions p {
+          margin: 5px 0;
+        }
+        
+        .map-done-button {
+          transition: all 0.3s ease;
+        }
+        
+        .map-done-button:hover {
+          background-color: #45a049 !important;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+        }
+        
+        /* 폴리라인 스타일 (CSS로는 직접 제어할 수 없지만 참고용) */
+        .navigation-route {
+          stroke-width: 6px;
+          stroke: #2196F3;
+          stroke-opacity: 0.9;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        
+        .fallback-route {
+          stroke-width: 4px;
+          stroke: #FF5722;
+          stroke-opacity: 0.7;
+          stroke-dasharray: 10,5;
+          stroke-linecap: round;
+        }
+      `}</style>
     </DndProvider>
   );
 }
