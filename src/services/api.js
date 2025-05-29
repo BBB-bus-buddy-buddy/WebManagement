@@ -441,128 +441,107 @@ static convertToServerFormat(appData, drivers, buses, routes) {
 }
 // api.js에 추가할 버스 관련 메서드
   
-// ==================== 버스 관련 메서드 (새 API 스펙에 맞게 수정) ====================
+  // ==================== 버스 관련 메서드 (수정됨) ====================
 
 /**
  * 모든 버스 조회
- * GET /api/bus
- * @returns {Promise<Object>} 버스 목록 응답
+ * @returns {Promise<Array>} 버스 목록
  */
 static async getAllBuses() {
-  try {
-    console.log('버스 목록 조회 시작...');
-    const response = await ApiService.apiRequest('bus');
-    console.log('버스 목록 API 응답:', response);
-    console.log('응답 타입:', typeof response);
-    console.log('응답 구조 키들:', response ? Object.keys(response) : 'null response');
-    
-    if (response && response.data) {
-      console.log('응답 데이터 길이:', response.data.length);
-      console.log('응답 메시지:', response.message);
-      
-      if (response.data.length === 0) {
-        console.log('⚠️ 버스 데이터가 비어있습니다. 가능한 원인:');
-        console.log('  1. 현재 조직에 등록된 버스가 없음');
-        console.log('  2. 사용자 권한으로 인한 데이터 필터링');
-        console.log('  3. 서버 측 조직별 필터링');
-      } else {
-        console.log('✅ 버스 데이터 조회 성공:', response.data.length, '개');
-      }
-    }
-    
-    return response;
-  } catch (error) {
-    console.error('❌ 버스 목록 조회 실패:', error);
-    throw error;
-  }
+  const data = await ApiService.apiRequest('bus');
+  return data;
 }
 
 /**
  * 특정 버스 조회
- * GET /api/bus/{busNumber}
  * @param {string} busNumber 조회할 버스 번호
  * @returns {Promise<Object>} 버스 정보
  */
 static async getBus(busNumber) {
-  try {
-    const response = await ApiService.apiRequest(`bus/${busNumber}`);
-    console.log('개별 버스 조회 응답:', response);
-    return response;
-  } catch (error) {
-    console.error('개별 버스 조회 실패:', error);
-    throw error;
-  }
+  const data = await ApiService.apiRequest(`bus/${busNumber}`);
+  return data;
 }
 
 /**
- * 버스 등록
- * POST /api/bus
- * 요청 파라미터: { routeId, totalSeats, busRealNumber, operationalStatus, serviceStatus }
- * @param {Object} busData 등록할 버스 데이터
- * @returns {Promise<Object>} 등록된 버스 정보
+ * 버스 좌석 정보 조회
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 좌석 정보
+ */
+static async getBusSeats(busNumber) {
+  const data = await ApiService.apiRequest(`bus/seats/${busNumber}`);
+  return data;
+}
+
+/**
+ * 버스 위치 정보 조회
+ * @param {string} busNumber 조회할 버스 번호
+ * @returns {Promise<Object>} 버스 위치 정보
+ */
+static async getBusLocation(busNumber) {
+  const data = await ApiService.apiRequest(`bus/location/${busNumber}`);
+  return data;
+}
+
+/**
+ * 버스 추가 (관리자 권한 필요) - 수정된 버전
+ * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": "45" }
+ * @param {Object} busData 추가할 버스 데이터
+ * @returns {Promise<Object>} 추가된 버스 정보
  */
 static async addBus(busData) {
   try {
-    console.log('버스 등록 요청 데이터:', busData);
+    console.log('버스 추가 API 요청 데이터:', busData);
     
-    // 새 API 스펙에 맞게 데이터 구성
+    // API 스펙에 맞게 데이터 구성
     const requestData = {
+      busNumber: busData.busNumber,
       routeId: busData.routeId,
-      totalSeats: Number(busData.totalSeats),
-      busRealNumber: busData.busRealNumber,
-      operationalStatus: busData.operationalStatus || 'ACTIVE',
-      serviceStatus: busData.serviceStatus || 'NOT_IN_SERVICE'
+      totalSeats: busData.totalSeats.toString() // 문자열로 변환
     };
     
-    console.log('최종 버스 등록 요청 데이터:', requestData);
+    console.log('최종 요청 데이터:', requestData);
     
     const response = await ApiService.apiRequest('bus', 'POST', requestData);
-    console.log('버스 등록 응답:', response);
+    console.log('버스 추가 응답:', response);
     
     return response;
   } catch (error) {
-    console.error('버스 등록 실패:', error);
+    console.error('버스 추가 중 오류:', error);
     throw error;
   }
 }
 
 /**
- * 버스 정보 수정
- * PUT /api/bus/{busNumber}
- * 요청 파라미터: { busNumber, busRealNumber, routeId, totalSeats, operationalStatus, serviceStatus }
+ * 버스 수정 - 수정된 버전
+ * API 스펙: { "busNumber": "108", "routeId": "680083e035d48b07417c0d00", "totalSeats": 45 }
  * @param {Object} busData 수정할 버스 데이터
  * @returns {Promise<Object>} 수정된 버스 정보
  */
 static async updateBus(busData) {
   try {
-    console.log('버스 수정 요청 데이터:', busData);
+    console.log('버스 수정 API 요청 데이터:', busData);
     
-    // 새 API 스펙에 맞게 데이터 구성
+    // API 스펙에 맞게 데이터 구성
     const requestData = {
       busNumber: busData.busNumber,
-      busRealNumber: busData.busRealNumber,
       routeId: busData.routeId,
-      totalSeats: Number(busData.totalSeats),
-      operationalStatus: busData.operationalStatus,
-      serviceStatus: busData.serviceStatus
+      totalSeats: Number(busData.totalSeats) // 숫자로 변환
     };
     
-    console.log('최종 버스 수정 요청 데이터:', requestData);
+    console.log('최종 요청 데이터:', requestData);
     
-    // URL에 busNumber 포함
-    const response = await ApiService.apiRequest(`bus/${busData.busNumber}`, 'PUT', requestData);
+    const response = await ApiService.apiRequest('bus', 'PUT', requestData);
     console.log('버스 수정 응답:', response);
     
     return response;
   } catch (error) {
-    console.error('버스 수정 실패:', error);
+    console.error('버스 수정 중 오류:', error);
     throw error;
   }
 }
 
 /**
  * 버스 삭제
- * DELETE /api/bus/{busNumber}
  * @param {string} busNumber 삭제할 버스 번호
  * @returns {Promise<Object>} 삭제 결과
  */
@@ -573,7 +552,7 @@ static async deleteBus(busNumber) {
     console.log('버스 삭제 응답:', response);
     return response;
   } catch (error) {
-    console.error('버스 삭제 실패:', error);
+    console.error('버스 삭제 중 오류:', error);
     throw error;
   }
 }
@@ -846,46 +825,20 @@ static async verifyOrganization(code) {
   }
 }
 
-/**
- * 현재 로그인한 사용자의 조직 정보 조회
- * @returns {Promise<Object>} 조직 정보
- */
-static async getCurrentOrganization() {
-  try {
-    const data = await ApiService.apiRequest('organization/current');
-    return data;
-  } catch (error) {
-    console.error('현재 조직 정보 조회 실패:', error);
-    throw error;
-  }
-}
-
-// services/api.js에 추가할 현재 사용자 및 조직별 필터링 메서드
-
-// ==================== 현재 사용자 정보 관련 메서드 ====================
-/**
-}
-
-/**
- * 토큰에서 사용자 정보 추출
- * @returns {Object|null} 디코딩된 사용자 정보
- */
-static getCurrentUserFromToken() {
-  try {
-    const token = ApiService.getToken();
-    if (!token) return null;
-    
-    // JWT 토큰 디코딩 (간단한 방법, 보안 검증은 서버에서)
-    const payload = token.split('.')[1];
-    const decodedPayload = atob(payload);
-    return JSON.parse(decodedPayload);
-  } catch (error) {
-    console.error('토큰 디코딩 실패:', error);
-    return null;
-  }
-}
-
-// ==================== 조직별 필터링된 데이터 조회 메서드 ====================
+// /**
+//  * 현재 로그인한 사용자의 조직 정보 조회
+//  * @returns {Promise<Object>} 조직 정보
+//  */
+// static async getCurrentOrganization() {
+//   try {
+//     const data = await ApiService.apiRequest('organization/current');
+//     return data;
+//   } catch (error) {
+//     console.error('현재 조직 정보 조회 실패:', error);
+//     throw error;
+//   }
+// }
+// api.js에 추가
 /**
  * 현재 조직의 이용자만 조회
  * @returns {Promise<Object>} 조직 이용자 목록
@@ -911,22 +864,6 @@ static async getOrganizationUsers() {
     throw error;
   }
 }
-
-/**
- * 현재 조직의 버스만 조회
- * @returns {Promise<Array>} 조직 버스 목록
- */
-static async getOrganizationBuses() {
-  try {
-    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
-    const data = await ApiService.apiRequest('bus');
-    return data;
-  } catch (error) {
-    console.error('조직 버스 조회 실패:', error);
-    throw error;
-  }
-}
-
 /**
  * 현재 조직의 정류장만 조회
  * @returns {Promise<Array>} 조직 정류장 목록
@@ -942,61 +879,240 @@ static async getOrganizationStations() {
   }
 }
 
+
+// ==================== 현재 사용자 정보 관련 메서드 ====================
 /**
- * 현재 조직의 노선만 조회
- * @returns {Promise<Array>} 조직 노선 목록
- */
-static async getOrganizationRoutes() {
-  try {
-    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
-    const data = await ApiService.apiRequest('routes');
-    return data;
-  } catch (error) {
-    console.error('조직 노선 조회 실패:', error);
-    throw error;
-  }
+
 }
 
 /**
- * 현재 조직의 버스 기사 배치표만 조회
- * @returns {Promise<Array>} 조직 배치표 목록
+ * 토큰에서 사용자 정보 추출
+ * @returns {Object|null} 디코딩된 사용자 정보
  */
-static async getOrganizationOperationPlans() {
+static getCurrentUserFromToken() {
   try {
-    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
-    const data = await ApiService.apiRequest('operationplan');
-    return data;
+    const token = ApiService.getToken();
+    if (!token) return null;
+    
+    // JWT 토큰 디코딩 (간단한 방법, 보안 검증은 서버에서)
+    const payload = token.split('.')[1];
+    const decodedPayload = atob(payload);
+    return JSON.parse(decodedPayload);
   } catch (error) {
-    console.error('조직 배치표 조회 실패:', error);
-    throw error;
+    console.error('토큰 디코딩 실패:', error);
+    return null;
   }
 }
 
+// ==================== 버스 기사(Driver) 관련 메서드 ====================
+
 /**
- * 현재 조직의 버스 기사만 조회
- * @returns {Promise<Array>} 조직 버스 기사 목록
+ * 조직의 모든 버스 기사 조회
+ * @returns {Promise<Object>} 버스 기사 목록
  */
 static async getOrganizationDrivers() {
   try {
-    // 조직별 필터링은 서버에서 토큰 기반으로 자동 처리됨
-    const response = await ApiService.apiRequest('user?role=DRIVER');
+    const response = await ApiService.apiRequest('driver');
     
-    // 응답에서 사용자 목록 추출
-    const userList = ApiService.extractUserList(response);
-    console.log('조직 기사 목록:', userList);
+    // 응답 구조 확인
+    console.log('버스 기사 목록 응답:', response);
     
-    // DRIVER 역할만 필터링
-    const driverRoleOnly = userList.filter(user => user && user.role === 'DRIVER');
-    
-    return {
-      data: driverRoleOnly,
-      message: response.message || '조직 버스 기사 목록을 가져왔습니다.'
-    };
+    // 응답에서 기사 목록 추출
+    if (response && response.data) {
+      return response;
+    } else {
+      return { data: [], message: '기사 목록이 없습니다.' };
+    }
   } catch (error) {
-    console.error('조직 버스 기사 조회 실패:', error);
+    console.error('버스 기사 조회 실패:', error);
     throw error;
   }
 }
+
+/**
+ * 특정 버스 기사 조회
+ * @param {string} driverId 조회할 기사 ID
+ * @returns {Promise<Object>} 기사 정보
+ */
+static async getDriver(driverId) {
+  try {
+    const response = await ApiService.apiRequest(`driver/${driverId}`);
+    return response;
+  } catch (error) {
+    console.error('버스 기사 상세 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 버스 기사 삭제
+ * @param {string} driverId 삭제할 기사 ID
+ * @returns {Promise<Object>} 삭제 결과
+ */
+static async deleteDriver(driverId) {
+  try {
+    const response = await ApiService.apiRequest(`driver/${driverId}`, 'DELETE');
+    return response;
+  } catch (error) {
+    console.error('버스 기사 삭제 실패:', error);
+    throw error;
+  }
+}
+
+/**
+ * 기사의 운행 계획 조회 (임시 - 실제 API 구현 필요)
+ * @param {string} driverName 기사 이름
+ * @param {Object} options 옵션 (limit 등)
+ * @returns {Promise<Array>} 운행 계획 목록
+ */
+static async getDriverOperationPlans(driverName, options = {}) {
+  try {
+    // 운행 계획 API가 구현되면 여기에 실제 엔드포인트 호출
+    // 현재는 빈 배열 반환
+    console.log(`${driverName} 기사의 운행 계획 조회 (미구현)`);
+    return [];
+  } catch (error) {
+    console.error('운행 계획 조회 실패:', error);
+    return [];
+  }
+}
+
+// ==================== 버스 운행 계획 관련 메서드 (NEW API) ====================
+  
+  /**
+   * 버스 운행 일정 추가
+   * @param {Object} operationPlanData OperationPlanDTO 데이터
+   * @returns {Promise<Object>} 추가된 운행 일정 정보
+   */
+  static async addOperationPlan(operationPlanData) {
+    try {
+      console.log('운행 일정 추가 요청:', operationPlanData);
+      const data = await ApiService.apiRequest('operation-plan', 'POST', operationPlanData);
+      return data;
+    } catch (error) {
+      console.error('운행 일정 추가 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 버스 운행 일정 일별 조회
+   * @param {string} date 조회할 날짜 (YYYY-MM-DD 형식)
+   * @returns {Promise<Object>} 해당 날짜의 운행 일정 목록
+   */
+  static async getOperationPlansByDate(date) {
+    try {
+      console.log('일별 운행 일정 조회:', date);
+      const data = await ApiService.apiRequest(`operation-plan/${date}`);
+      return data;
+    } catch (error) {
+      console.error('일별 운행 일정 조회 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 버스 운행 일정 오늘자 조회
+   * @returns {Promise<Object>} 오늘의 운행 일정 목록
+   */
+  static async getTodayOperationPlans() {
+    try {
+      console.log('오늘 운행 일정 조회');
+      const data = await ApiService.apiRequest('operation-plan/today');
+      return data;
+    } catch (error) {
+      console.error('오늘 운행 일정 조회 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 버스 운행 일정 주별 조회
+   * @param {string} startDate 주 시작 날짜 (선택사항)
+   * @returns {Promise<Object>} 주간 운행 일정 목록
+   */
+  static async getWeeklyOperationPlans(startDate = null) {
+    try {
+      console.log('주별 운행 일정 조회:', startDate);
+      let endpoint = 'operation-plan/weekly';
+      if (startDate) {
+        endpoint += `?startDate=${startDate}`;
+      }
+      const data = await ApiService.apiRequest(endpoint);
+      return data;
+    } catch (error) {
+      console.error('주별 운행 일정 조회 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 버스 운행 일정 월별 조회
+   * @param {string} yearMonth 년월 (YYYY-MM 형식, 선택사항)
+   * @returns {Promise<Object>} 월간 운행 일정 목록
+   */
+  static async getMonthlyOperationPlans(yearMonth = null) {
+    try {
+      console.log('월별 운행 일정 조회:', yearMonth);
+      let endpoint = 'operation-plan/monthly';
+      if (yearMonth) {
+        endpoint += `?yearMonth=${yearMonth}`;
+      }
+      const data = await ApiService.apiRequest(endpoint);
+      return data;
+    } catch (error) {
+      console.error('월별 운행 일정 조회 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 특정 버스 운행 일정 상세 조회
+   * @param {string} id 운행 일정 ID
+   * @returns {Promise<Object>} 운행 일정 상세 정보
+   */
+  static async getOperationPlanDetail(id) {
+    try {
+      console.log('운행 일정 상세 조회:', id);
+      const data = await ApiService.apiRequest(`operation-plan/detail/${id}`);
+      return data;
+    } catch (error) {
+      console.error('운행 일정 상세 조회 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 버스 운행 일정 삭제
+   * @param {string} id 삭제할 운행 일정 ID
+   * @returns {Promise<Object>} 삭제 결과
+   */
+  static async deleteOperationPlan(id) {
+    try {
+      console.log('운행 일정 삭제:', id);
+      const data = await ApiService.apiRequest(`operation-plan/${id}`, 'DELETE');
+      return data;
+    } catch (error) {
+      console.error('운행 일정 삭제 실패:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 버스 운행 일정 수정
+   * @param {Object} operationPlanData OperationPlanDTO 데이터 (ID 포함)
+   * @returns {Promise<Object>} 수정된 운행 일정 정보
+   */
+  static async updateOperationPlan(operationPlanData) {
+    try {
+      console.log('운행 일정 수정 요청:', operationPlanData);
+      const data = await ApiService.apiRequest('operation-plan', 'PUT', operationPlanData);
+      return data;
+    } catch (error) {
+      console.error('운행 일정 수정 실패:', error);
+      throw error;
+    }
+  }
 }
 
 export default ApiService;

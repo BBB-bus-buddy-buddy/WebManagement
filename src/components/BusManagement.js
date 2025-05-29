@@ -12,19 +12,16 @@ function BusManagement() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [routes, setRoutes] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [editBus, setEditBus] = useState({
     busNumber: '',
-    busRealNumber: '',
     routeId: '',
     totalSeats: 45,
-    operationalStatus: 'ACTIVE',
     serviceStatus: 'NOT_IN_SERVICE'
   });
   const [newBus, setNewBus] = useState({
-    busRealNumber: '',
     routeId: '',
     totalSeats: 45,
-    operationalStatus: 'ACTIVE',
     serviceStatus: 'NOT_IN_SERVICE'
   });
 
@@ -119,6 +116,10 @@ function BusManagement() {
     }
   };
 
+
+
+
+
   const handleBusClick = (bus) => {
     setSelectedBus(bus);
     setShowAddForm(false);
@@ -130,10 +131,8 @@ function BusManagement() {
     setShowAddForm(true);
     setShowEditForm(false);
     setNewBus({
-      busRealNumber: '',
       routeId: routes.length > 0 ? routes[0].id : '',
       totalSeats: 45,
-      operationalStatus: 'ACTIVE',
       serviceStatus: 'NOT_IN_SERVICE'
     });
   };
@@ -210,10 +209,8 @@ function BusManagement() {
     if (selectedBus) {
       const busToEdit = {
         busNumber: selectedBus.busNumber,
-        busRealNumber: selectedBus.busRealNumber || '',
         routeId: selectedBus.routeId || '',
         totalSeats: selectedBus.totalSeats || 45,
-        operationalStatus: selectedBus.operationalStatus || 'ACTIVE',
         serviceStatus: selectedBus.serviceStatus || 'NOT_IN_SERVICE'
       };
       
@@ -322,15 +319,39 @@ function BusManagement() {
         <div className="list-section">
           <div className="list-header">
             <h2>버스 목록</h2>
-            <button onClick={handleAddBusClick} className="add-button">+ 버스 등록</button>
+            <div className="list-controls">
+              <div className="search-bar">
+                <input
+                  type="text"
+                  placeholder="버스 번호 또는 노선 검색..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <button onClick={handleAddBusClick} className="add-button">+ 버스 등록</button>
+            </div>
           </div>
           <div className="bus-list">
             {loading && buses.length === 0 ? (
               <div className="loading">로딩 중...</div>
-            ) : buses.length === 0 ? (
-              <div className="empty-list">등록된 버스가 없습니다.</div>
+            ) : buses.filter(bus => {
+                const busNumber = bus.busNumber?.toString().toLowerCase() || '';
+                const routeName = getRouteName(bus).toLowerCase();
+                const search = searchTerm.toLowerCase();
+                
+                return busNumber.includes(search) || routeName.includes(search);
+              }).length === 0 ? (
+              <div className="empty-list">
+                {searchTerm ? '검색 결과가 없습니다.' : '등록된 버스가 없습니다.'}
+              </div>
             ) : (
-              buses.map(bus => (
+              buses.filter(bus => {
+                const busNumber = bus.busNumber?.toString().toLowerCase() || '';
+                const routeName = getRouteName(bus).toLowerCase();
+                const search = searchTerm.toLowerCase();
+                
+                return busNumber.includes(search) || routeName.includes(search);
+              }).map(bus => (
                 <div
                   key={bus.busNumber}
                   className={`bus-item ${selectedBus && selectedBus.busNumber === bus.busNumber ? 'selected' : ''}`}
@@ -338,15 +359,7 @@ function BusManagement() {
                 >
                   <div className="bus-info">
                     <h3>버스 {bus.busNumber}</h3>
-                    <p>실제 번호: {bus.busRealNumber || '정보 없음'}</p>
-                    <p>총 좌석: {bus.totalSeats || '정보 없음'}</p>
-                    <p className="route-info">노선: {getRouteName(bus)}</p>
-                    <p>상태: {getOperationalStatusLabel(bus.operationalStatus)} / {getServiceStatusLabel(bus.serviceStatus)}</p>
-                    {/* 새 API 응답의 실시간 정보 표시 */}
-                    <p>탑승객: {bus.currentPassengers || 0}명 / 가용석: {bus.availableSeats || bus.totalSeats || 0}석</p>
-                    {bus.currentlyOperating && (
-                      <p className="operating-status">🚌 현재 운행중</p>
-                    )}
+                    <p>노선: {getRouteName(bus)}</p>
                   </div>
                   <button
                     onClick={(e) => {
@@ -375,7 +388,6 @@ function BusManagement() {
               {!showEditForm ? (
                 <div>
                   <div className="detail-info">
-                    <div className="detail-section-title">기본 정보</div>
                     <div className="detail-row">
                       <label>버스 번호:</label>
                       <span>{selectedBus.busNumber}</span>
@@ -400,122 +412,66 @@ function BusManagement() {
                       <label>서비스 상태:</label>
                       <span>{getServiceStatusLabel(selectedBus.serviceStatus)}</span>
                     </div>
-                    
-                    <div className="detail-section-title">실시간 정보</div>
-                    <div className="detail-row">
-                      <label>현재 탑승객:</label>
-                      <span>{selectedBus.currentPassengers || 0}명</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>가용 좌석:</label>
-                      <span>{selectedBus.availableSeats || selectedBus.totalSeats || 0}석</span>
-                    </div>
-                    <div className="detail-row">
-                      <label>현재 운행 중:</label>
-                      <span>{selectedBus.currentlyOperating ? '예' : '아니오'}</span>
-                    </div>
-                    
-                    {selectedBus.currentDriverName && (
-                      <>
-                        <div className="detail-section-title">운행 정보</div>
-                        <div className="detail-row">
-                          <label>현재 기사:</label>
-                          <span>{selectedBus.currentDriverName}</span>
-                        </div>
-                        <div className="detail-row">
-                          <label>현재 운행 ID:</label>
-                          <span>{selectedBus.currentOperationId || '정보 없음'}</span>
-                        </div>
-                      </>
-                    )}
                   </div>
                 </div>
               ) : (
                 <div className="edit-bus-form">
                   <h3>버스 정보 수정</h3>
-                  <form onSubmit={handleUpdateBus}>
-                    <div className="form-section">
-                      <div className="form-section-title">기본 정보</div>
-                      <div className="form-group">
-                        <label htmlFor="busNumber">버스 번호</label>
-                        <input 
-                          type="text" 
-                          id="busNumber" 
-                          name="busNumber" 
-                          value={editBus.busNumber} 
-                          onChange={handleBusInputChange} 
-                          required 
-                          readOnly // 버스 번호는 변경 불가능
-                        />
-                        <small className="form-hint">버스 번호는 변경할 수 없습니다.</small>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="busRealNumber">실제 버스 번호</label>
-                        <input 
-                          type="text" 
-                          id="busRealNumber" 
-                          name="busRealNumber" 
-                          value={editBus.busRealNumber} 
-                          onChange={handleBusInputChange} 
-                          placeholder="실제 버스 번호 입력"
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="routeId">노선</label>
-                        <select 
-                          id="routeId" 
-                          name="routeId" 
-                          value={editBus.routeId} 
-                          onChange={handleBusInputChange} 
-                          required
-                        >
-                          <option value="">노선을 선택하세요</option>
-                          {routes.map(route => (
-                            <option key={route.id} value={route.id}>{route.routeName || route.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="totalSeats">총 좌석</label>
-                        <input 
-                          type="number" 
-                          id="totalSeats" 
-                          name="totalSeats" 
-                          min="1"
-                          max="100"
-                          value={editBus.totalSeats} 
-                          onChange={handleBusInputChange} 
-                          required 
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="operationalStatus">운영 상태</label>
-                        <select 
-                          id="operationalStatus" 
-                          name="operationalStatus" 
-                          value={editBus.operationalStatus} 
-                          onChange={handleBusInputChange} 
-                          required
-                        >
-                          {operationalStatusOptions.map(option => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="serviceStatus">서비스 상태</label>
-                        <select 
-                          id="serviceStatus" 
-                          name="serviceStatus" 
-                          value={editBus.serviceStatus} 
-                          onChange={handleBusInputChange} 
-                          required
-                        >
-                          {serviceStatusOptions.map(option => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </div>
+                  <form onSubmit={handleUpdateBus} className="bus-form">
+                    <div className="form-group">
+                      <label htmlFor="busNumber">버스 번호</label>
+                      <input 
+                        type="text" 
+                        id="busNumber" 
+                        name="busNumber" 
+                        value={editBus.busNumber} 
+                        onChange={handleBusInputChange} 
+                        required 
+                        readOnly
+                      />
+                      <small className="form-hint">버스 번호는 변경할 수 없습니다.</small>
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="routeId">노선</label>
+                      <select 
+                        id="routeId" 
+                        name="routeId" 
+                        value={editBus.routeId} 
+                        onChange={handleBusInputChange} 
+                        required
+                      >
+                        <option value="">노선을 선택하세요</option>
+                        {routes.map(route => (
+                          <option key={route.id} value={route.id}>{route.routeName || route.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="totalSeats">총 좌석</label>
+                      <input 
+                        type="number" 
+                        id="totalSeats" 
+                        name="totalSeats" 
+                        min="1"
+                        max="100"
+                        value={editBus.totalSeats} 
+                        onChange={handleBusInputChange} 
+                        required 
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="serviceStatus">서비스 상태</label>
+                      <select 
+                        id="serviceStatus" 
+                        name="serviceStatus" 
+                        value={editBus.serviceStatus} 
+                        onChange={handleBusInputChange} 
+                        required
+                      >
+                        {serviceStatusOptions.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
                     </div>
                     
                     <div className="form-actions">
@@ -537,78 +493,48 @@ function BusManagement() {
           ) : showAddForm ? (
             <div className="add-bus-form">
               <h2>새 버스 등록</h2>
-              <form onSubmit={handleAddBus}>
-                <div className="form-section">
-                  <div className="form-section-title">기본 정보</div>
-                  <div className="form-group">
-                    <label htmlFor="busRealNumber">실제 버스 번호</label>
-                    <input
-                      type="text"
-                      id="busRealNumber"
-                      name="busRealNumber"
-                      value={newBus.busRealNumber}
-                      onChange={handleInputChange}
-                      required
-                      placeholder="실제 버스 번호 입력"
-                    />
-                    <small className="form-hint">실제 운행하는 버스의 번호를 입력하세요.</small>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="routeId">노선</label>
-                    <select 
-                      id="routeId" 
-                      name="routeId" 
-                      value={newBus.routeId} 
-                      onChange={handleInputChange} 
-                      required
-                    >
-                      <option value="">노선을 선택하세요</option>
-                      {routes.map(route => (
-                        <option key={route.id} value={route.id}>{route.routeName || route.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="totalSeats">총 좌석</label>
-                    <input
-                      type="number"
-                      id="totalSeats"
-                      name="totalSeats"
-                      min="1"
-                      max="100"
-                      value={newBus.totalSeats}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="operationalStatus">운영 상태</label>
-                    <select 
-                      id="operationalStatus" 
-                      name="operationalStatus" 
-                      value={newBus.operationalStatus} 
-                      onChange={handleInputChange} 
-                      required
-                    >
-                      {operationalStatusOptions.map(option => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="serviceStatus">서비스 상태</label>
-                    <select 
-                      id="serviceStatus" 
-                      name="serviceStatus" 
-                      value={newBus.serviceStatus} 
-                      onChange={handleInputChange} 
-                      required
-                    >
-                      {serviceStatusOptions.map(option => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </div>
+              <form onSubmit={handleAddBus} className="bus-form">
+                <div className="form-group">
+                  <label htmlFor="routeId">노선</label>
+                  <select 
+                    id="routeId" 
+                    name="routeId" 
+                    value={newBus.routeId} 
+                    onChange={handleInputChange} 
+                    required
+                  >
+                    <option value="">노선을 선택하세요</option>
+                    {routes.map(route => (
+                      <option key={route.id} value={route.id}>{route.routeName || route.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="totalSeats">총 좌석</label>
+                  <input
+                    type="number"
+                    id="totalSeats"
+                    name="totalSeats"
+                    min="1"
+                    max="100"
+                    value={newBus.totalSeats}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="serviceStatus">서비스 상태</label>
+                  <select 
+                    id="serviceStatus" 
+                    name="serviceStatus" 
+                    value={newBus.serviceStatus} 
+                    onChange={handleInputChange} 
+                    required
+                  >
+                    {serviceStatusOptions.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
                 </div>
                 
                 <div className="form-actions">

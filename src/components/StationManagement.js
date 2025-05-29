@@ -1,4 +1,4 @@
-// components/StationManagement.js - 조직별 필터링 적용
+// components/StationManagement.js - 조직명 표시 개선
 import React, { useState, useEffect, useRef } from 'react';
 import ApiService from '../services/api';
 import '../styles/StationManagement.css';
@@ -38,13 +38,53 @@ function StationManagement() {
 
   // Fetch all organization stations on component mount
   useEffect(() => {
+    fetchOrganizationInfo(); // 조직 정보를 먼저 가져오기
     fetchStations();
     loadKakaoMapScript();
   }, []);
 
-  
-
-  
+  // 조직 정보 가져오기 (UserManagement와 동일한 방식)
+  const fetchOrganizationInfo = async () => {
+    try {
+      // 현재 로그인한 사용자의 조직 정보 가져오기
+      const response = await ApiService.getCurrentOrganization();
+      
+      if (response && response.data && response.data.name) {
+        setOrganizationName(response.data.name);
+        console.log('조직 정보 조회 성공:', response.data.name);
+      } else {
+        // API 응답이 없는 경우 토큰에서 정보 추출 시도
+        const userInfo = ApiService.getCurrentUserFromToken();
+        if (userInfo && userInfo.organizationName) {
+          setOrganizationName(userInfo.organizationName);
+        } else {
+          setOrganizationName('현재 조직');
+        }
+      }
+    } catch (error) {
+      console.error('조직 정보 조회 실패:', error);
+      
+      // 실패 시 토큰에서 정보 추출 시도
+      try {
+        const userInfo = ApiService.getCurrentUserFromToken();
+        if (userInfo && userInfo.organizationName) {
+          setOrganizationName(userInfo.organizationName);
+        } else if (userInfo && userInfo.organizationId) {
+          // 기본 조직명 매핑
+          const knownOrganizations = {
+            "Uasidnw": "울산과학대학교",
+            // 필요시 다른 조직 추가
+          };
+          setOrganizationName(knownOrganizations[userInfo.organizationId] || userInfo.organizationId || '현재 조직');
+        } else {
+          setOrganizationName('현재 조직');
+        }
+      } catch (tokenError) {
+        console.error('토큰에서 정보 추출 실패:', tokenError);
+        setOrganizationName('현재 조직');
+      }
+    }
+  };
 
   // Load Kakao Maps API
   const loadKakaoMapScript = () => {
@@ -544,66 +584,68 @@ const renderStationForm = (isEdit = false) => {
 };
 
   return (
-    <div className="station-management">
-      <div className="management-header">
-        <h1>정류장 관리</h1>
-      </div>
-      
-      {error && <div className="error-message">{error}</div>}
-      {!mapLoaded && <div className="loading-message">지도를 로딩 중입니다...</div>}
-      
-      <div className="management-container">
-        <div className="list-section">
-          <div className="list-header">
-            <h2>정류장 목록 ({filteredStations.length}개)</h2>
-            <div className="search-bar">
-              <input
-                type="text"
-                placeholder="정류장 이름으로 검색"
-                value={searchQuery}
-                onChange={handleSearch}
-              />
-            </div>
-            <button onClick={handleAddStationClick} className="add-button">+ 정류장 등록</button>
+  <div className="station-management">
+    <div className="management-header">
+      <h1>정류장 관리</h1>
+    </div>
+    
+    {error && <div className="error-message">{error}</div>}
+    {!mapLoaded && <div className="loading-message">지도를 로딩 중입니다...</div>}
+    
+    <div className="management-container">
+      <div className="list-section">
+        <div className="list-header">
+          <h4 style={{marginRight: '10px'}}>정류장 목록</h4>
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="정류장 이름으로 검색"
+              value={searchQuery}
+              onChange={handleSearch}
+            />
           </div>
-          
-          <div className="station-list">
-            {loading ? (
-              <div key="loading" className="loading">로딩 중...</div>
-            ) : !Array.isArray(filteredStations) ? (
-              <div key="format-error" className="empty-list">데이터 형식이 올바르지 않습니다.</div>
-            ) : filteredStations.length === 0 ? (
-              <div key="no-results" className="empty-list">
-                {searchQuery ? '검색 결과가 없습니다.' : '등록된 정류장이 없습니다.'}
-              </div>
-            ) : (
-              filteredStations.map(station => (
-                <div 
-                  key={station.id} 
-                  className={`station-item ${selectedStation && selectedStation.id === station.id ? 'selected' : ''}`}
-                  onClick={() => handleStationClick(station)}
-                >
-                  <div className="station-info">
-                    <h3>{station.name}</h3>
-                    <p className="station-coords">
-                      위도: {station.location?.coordinates[0]?.toFixed(4)}, 
-                      경도: {station.location?.coordinates[1]?.toFixed(4)}
-                    </p>
-                  </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteStation(station.id);
-                    }} 
-                    className="delete-button"
-                  >
-                    삭제
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
+          <button onClick={handleAddStationClick} className="add-button">
+            +
+          </button>
         </div>
+        
+        <div className="station-list">
+          {loading ? (
+            <div className="loading">로딩 중...</div>
+          ) : !Array.isArray(filteredStations) ? (
+            <div className="empty-list">데이터 형식이 올바르지 않습니다.</div>
+          ) : filteredStations.length === 0 ? (
+            <div className="empty-list">
+              {searchQuery ? '검색 결과가 없습니다.' : '등록된 정류장이 없습니다.'}
+            </div>
+          ) : (
+            filteredStations.map(station => (
+              <div 
+                key={station.id} 
+                className={`station-item ${selectedStation && selectedStation.id === station.id ? 'selected' : ''}`}
+                onClick={() => handleStationClick(station)}
+              >
+                <div className="station-info">
+                  <h3>{station.name}</h3>
+                  <p className="station-coords">
+                    위도: {station.location?.coordinates[0]?.toFixed(4)}, 
+                    경도: {station.location?.coordinates[1]?.toFixed(4)}
+                  </p>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteStation(station.id);
+                  }} 
+                  className="delete-button"
+                >
+                  삭제
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
         
         <div className="detail-section">
           {selectedStation && !showEditForm ? (
@@ -627,7 +669,7 @@ const renderStationForm = (isEdit = false) => {
                 </div>
                 <div className="detail-row">
                   <label>소속:</label>
-                  <span>{organizationName || selectedStation.organizationId || '정보 없음'}</span>
+                  <span>{organizationName || '조직 정보 없음'}</span>
                 </div>
               </div>
               

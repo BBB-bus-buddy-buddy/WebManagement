@@ -1,4 +1,4 @@
-// components/BusSchedule.js - FullCalendar 적용 버전
+// components/BusSchedule.js - 새로운 API 적용 버전
 import React, { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -9,8 +9,8 @@ import ApiService from '../services/api';
 import '../styles/BusSchedule.css';
 
 /**
- * 버스 기사 배치표 컴포넌트 - FullCalendar 적용
- * 실제 API 데이터를 사용하여 버스 기사, 버스, 노선 정보를 관리하고 스케줄 CRUD 기능 제공
+ * 버스 기사 배치표 컴포넌트 - 새로운 API 적용
+ * 새로운 operation-plan API를 사용하여 버스 기사, 버스, 노선 정보를 관리하고 스케줄 CRUD 기능 제공
  */
 function BusSchedule() {
   // FullCalendar 참조
@@ -23,6 +23,7 @@ function BusSchedule() {
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentDate, setCurrentDate] = useState(new Date());
   
   // 모달 상태
   const [showModal, setShowModal] = useState(false);
@@ -33,7 +34,7 @@ function BusSchedule() {
   
   // 폼 데이터
   const [formData, setFormData] = useState({
-    operationPlanID: '',
+    id: '',
     driverId: '',
     busId: '',
     routeId: '',
@@ -49,12 +50,17 @@ function BusSchedule() {
     loadInitialData();
   }, []);
 
+  // 캘린더 날짜 변경 시 해당 월의 데이터 로드
+  useEffect(() => {
+    fetchSchedulesForMonth(currentDate);
+  }, [currentDate]);
+
   // 초기 데이터 로드
   const loadInitialData = async () => {
     setLoading(true);
     try {
       await Promise.all([
-        fetchSchedules(),
+        fetchSchedulesForMonth(currentDate),
         fetchDrivers(),
         fetchBuses(),
         fetchRoutes()
@@ -67,19 +73,78 @@ function BusSchedule() {
     }
   };
 
-  // 스케줄 데이터 가져오기
-  const fetchSchedules = async () => {
+  // 월별 스케줄 데이터 가져오기
+  const fetchSchedulesForMonth = async (date) => {
     try {
-      const response = await ApiService.getAllOperationPlans();
-      console.log('스케줄 API 응답:', response);
+      const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      console.log('월별 스케줄 조회 요청:', yearMonth);
+      
+      const response = await ApiService.getMonthlyOperationPlans(yearMonth);
+      console.log('월별 스케줄 API 응답:', response);
       
       if (response && response.data) {
         // API 응답에서 스케줄 데이터 추출
         const scheduleData = Array.isArray(response.data) ? response.data : [];
         setSchedules(scheduleData);
+      } else {
+        setSchedules([]);
       }
     } catch (error) {
-      console.error('스케줄 조회 실패:', error);
+      console.error('월별 스케줄 조회 실패:', error);
+      setSchedules([]);
+      // 에러가 발생해도 다른 데이터는 계속 로드
+    }
+  };
+
+  // 오늘 스케줄 데이터 가져오기
+  const fetchTodaySchedules = async () => {
+    try {
+      console.log('오늘 스케줄 조회 요청');
+      const response = await ApiService.getTodayOperationPlans();
+      console.log('오늘 스케줄 API 응답:', response);
+      
+      if (response && response.data) {
+        const scheduleData = Array.isArray(response.data) ? response.data : [];
+        setSchedules(scheduleData);
+      }
+    } catch (error) {
+      console.error('오늘 스케줄 조회 실패:', error);
+      throw error;
+    }
+  };
+
+  // 주별 스케줄 데이터 가져오기
+  const fetchWeeklySchedules = async (startDate = null) => {
+    try {
+      console.log('주별 스케줄 조회 요청:', startDate);
+      const response = await ApiService.getWeeklyOperationPlans(startDate);
+      console.log('주별 스케줄 API 응답:', response);
+      
+      if (response && response.data) {
+        const scheduleData = Array.isArray(response.data) ? response.data : [];
+        setSchedules(scheduleData);
+      }
+    } catch (error) {
+      console.error('주별 스케줄 조회 실패:', error);
+      throw error;
+    }
+  };
+
+  // 특정 날짜 스케줄 데이터 가져오기
+  const fetchSchedulesByDate = async (date) => {
+    try {
+      const dateStr = typeof date === 'string' ? date : ApiService.formatDate(date);
+      console.log('일별 스케줄 조회 요청:', dateStr);
+      
+      const response = await ApiService.getOperationPlansByDate(dateStr);
+      console.log('일별 스케줄 API 응답:', response);
+      
+      if (response && response.data) {
+        const scheduleData = Array.isArray(response.data) ? response.data : [];
+        setSchedules(scheduleData);
+      }
+    } catch (error) {
+      console.error('일별 스케줄 조회 실패:', error);
       throw error;
     }
   };
@@ -157,38 +222,54 @@ function BusSchedule() {
       const bus = buses.find(b => b.id === schedule.busId);
       const route = routes.find(r => r.id === schedule.routeId);
       
-      // 운행 시작 및 종료 시간 파싱
+      // 운행 날짜 및 시간 처리
+      let operationDate = schedule.operationDate || schedule.date;
       let startTime = '08:00';
       let endTime = '17:00';
       
-      if (schedule.operationTime) {
+      // 시간 정보 추출
+      if (schedule.operationStart && schedule.operationEnd) {
+        // ISO 날짜 문자열에서 시간 추출
+        const startDate = new Date(schedule.operationStart);
+        const endDate = new Date(schedule.operationEnd);
+        
+        operationDate = ApiService.formatDate(startDate);
+        startTime = `${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}`;
+        endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
+      } else if (schedule.startTime && schedule.endTime) {
+        // 별도의 시간 필드가 있는 경우
+        startTime = schedule.startTime;
+        endTime = schedule.endTime;
+      } else if (schedule.operationTime) {
+        // 기존 형식: "08:00-17:00"
         const [start, end] = schedule.operationTime.split('-');
         startTime = start || '08:00';
         endTime = end || '17:00';
       }
       
       // 날짜와 시간 결합
-      const startDateTime = `${schedule.operationDate}T${startTime}`;
-      const endDateTime = `${schedule.operationDate}T${endTime}`;
+      const startDateTime = `${operationDate}T${startTime}`;
+      const endDateTime = `${operationDate}T${endTime}`;
       
       return {
-        id: schedule.operationPlanID || schedule.id,
+        id: schedule.id || schedule.operationPlanID || schedule._id,
         title: `${driver?.name || '미지정'} - ${bus?.busNumber || '미지정'}번`,
         start: startDateTime,
         end: endDateTime,
         backgroundColor: getDriverColor(driver?.name),
         borderColor: getDriverColor(driver?.name),
         extendedProps: {
-          operationPlanID: schedule.operationPlanID || schedule.id,
+          id: schedule.id || schedule.operationPlanID || schedule._id,
           driverId: schedule.driverId,
           driverName: driver?.name || '미지정',
           busId: schedule.busId,
           busNumber: bus?.busNumber || '미지정',
           routeId: schedule.routeId,
           routeName: route?.routeName || '미지정',
-          operationDate: schedule.operationDate,
+          operationDate: operationDate,
           startTime: startTime,
-          endTime: endTime
+          endTime: endTime,
+          originalSchedule: schedule
         }
       };
     });
@@ -210,7 +291,7 @@ function BusSchedule() {
   const handleDateClick = (info) => {
     setModalMode('add');
     setFormData({
-      operationPlanID: '',
+      id: '',
       driverId: '',
       busId: '',
       routeId: '',
@@ -231,6 +312,12 @@ function BusSchedule() {
     setShowDetailModal(true);
   };
 
+  // 캘린더 날짜 변경 핸들러
+  const handleDatesSet = (dateInfo) => {
+    const newDate = new Date(dateInfo.start);
+    setCurrentDate(newDate);
+  };
+
   // 폼 입력 핸들러
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -246,14 +333,24 @@ function BusSchedule() {
     setLoading(true);
     
     try {
-      // API 요청 데이터 준비
+      // OperationPlanDTO 형식에 맞게 데이터 준비
+      const operationStartDate = new Date(`${formData.operationDate}T${formData.startTime}`);
+      const operationEndDate = new Date(`${formData.operationDate}T${formData.endTime}`);
+      
       const requestData = {
         driverId: formData.driverId,
         busId: formData.busId,
         routeId: formData.routeId,
-        operationStart: new Date(`${formData.operationDate}T${formData.startTime}`).toISOString(),
-        operationEnd: new Date(`${formData.operationDate}T${formData.endTime}`).toISOString()
+        operationStart: operationStartDate.toISOString(),
+        operationEnd: operationEndDate.toISOString()
       };
+      
+      // 수정 모드인 경우 ID 추가
+      if (modalMode === 'edit' && formData.id) {
+        requestData.id = formData.id;
+      }
+      
+      console.log('운행 일정 요청 데이터:', requestData);
       
       if (modalMode === 'add') {
         // 추가 모드
@@ -264,10 +361,13 @@ function BusSchedule() {
             const repeatDate = new Date(formData.operationDate);
             repeatDate.setDate(repeatDate.getDate() + (i * 7));
             
+            const repeatStartDate = new Date(`${ApiService.formatDate(repeatDate)}T${formData.startTime}`);
+            const repeatEndDate = new Date(`${ApiService.formatDate(repeatDate)}T${formData.endTime}`);
+            
             const repeatData = {
               ...requestData,
-              operationStart: new Date(`${repeatDate.toISOString().split('T')[0]}T${formData.startTime}`).toISOString(),
-              operationEnd: new Date(`${repeatDate.toISOString().split('T')[0]}T${formData.endTime}`).toISOString()
+              operationStart: repeatStartDate.toISOString(),
+              operationEnd: repeatEndDate.toISOString()
             };
             
             promises.push(ApiService.addOperationPlan(repeatData));
@@ -282,30 +382,19 @@ function BusSchedule() {
         }
       } else {
         // 수정 모드
-        requestData.operationPlanID = formData.operationPlanID;
         await ApiService.updateOperationPlan(requestData);
         alert('운행 배치가 수정되었습니다!');
       }
       
       // 데이터 새로고침
-      await fetchSchedules();
+      await fetchSchedulesForMonth(currentDate);
       
       // 모달 닫기
       setShowModal(false);
-      setFormData({
-        operationPlanID: '',
-        driverId: '',
-        busId: '',
-        routeId: '',
-        operationDate: '',
-        startTime: '08:00',
-        endTime: '17:00',
-        isRepeating: false,
-        repeatWeeks: 4
-      });
+      resetFormData();
     } catch (error) {
       console.error('스케줄 저장 실패:', error);
-      alert('스케줄 저장에 실패했습니다.');
+      alert('스케줄 저장에 실패했습니다: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -316,13 +405,16 @@ function BusSchedule() {
     if (window.confirm('이 운행 배치를 삭제하시겠습니까?')) {
       setLoading(true);
       try {
-        await ApiService.deleteOperationPlan(selectedSchedule.operationPlanID);
-        await fetchSchedules();
+        const scheduleId = selectedSchedule.id;
+        console.log('삭제할 스케줄 ID:', scheduleId);
+        
+        await ApiService.deleteOperationPlan(scheduleId);
+        await fetchSchedulesForMonth(currentDate);
         setShowDetailModal(false);
         alert('운행 배치가 삭제되었습니다.');
       } catch (error) {
         console.error('스케줄 삭제 실패:', error);
-        alert('스케줄 삭제에 실패했습니다.');
+        alert('스케줄 삭제에 실패했습니다: ' + error.message);
       } finally {
         setLoading(false);
       }
@@ -333,7 +425,7 @@ function BusSchedule() {
   const handleEdit = () => {
     setModalMode('edit');
     setFormData({
-      operationPlanID: selectedSchedule.operationPlanID,
+      id: selectedSchedule.id,
       driverId: selectedSchedule.driverId,
       busId: selectedSchedule.busId,
       routeId: selectedSchedule.routeId,
@@ -345,6 +437,53 @@ function BusSchedule() {
     });
     setShowDetailModal(false);
     setShowModal(true);
+  };
+
+  // 폼 데이터 리셋
+  const resetFormData = () => {
+    setFormData({
+      id: '',
+      driverId: '',
+      busId: '',
+      routeId: '',
+      operationDate: '',
+      startTime: '08:00',
+      endTime: '17:00',
+      isRepeating: false,
+      repeatWeeks: 4
+    });
+  };
+
+  // 오늘 스케줄 보기
+  const handleViewToday = async () => {
+    setLoading(true);
+    try {
+      await fetchTodaySchedules();
+      alert('오늘의 운행 일정을 불러왔습니다.');
+    } catch (error) {
+      console.error('오늘 스케줄 조회 실패:', error);
+      alert('오늘 스케줄 조회에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 이번 주 스케줄 보기
+  const handleViewThisWeek = async () => {
+    setLoading(true);
+    try {
+      const today = new Date();
+      const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
+      const startDate = ApiService.formatDate(startOfWeek);
+      
+      await fetchWeeklySchedules(startDate);
+      alert('이번 주 운행 일정을 불러왔습니다.');
+    } catch (error) {
+      console.error('이번 주 스케줄 조회 실패:', error);
+      alert('이번 주 스케줄 조회에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -359,28 +498,36 @@ function BusSchedule() {
             className="btn btn-success" 
             onClick={() => {
               setModalMode('add');
-              setFormData({
-                operationPlanID: '',
-                driverId: '',
-                busId: '',
-                routeId: '',
-                operationDate: new Date().toISOString().split('T')[0],
-                startTime: '08:00',
-                endTime: '17:00',
-                isRepeating: false,
-                repeatWeeks: 4
-              });
+              resetFormData();
+              setFormData(prev => ({
+                ...prev,
+                operationDate: new Date().toISOString().split('T')[0]
+              }));
               setShowModal(true);
             }}
             disabled={loading}
           >
             + 운행 배치 추가
           </button>
+          <button 
+            className="btn btn-primary"
+            onClick={handleViewToday}
+            disabled={loading}
+          >
+            📅 오늘 일정
+          </button>
+          <button 
+            className="btn btn-primary"
+            onClick={handleViewThisWeek}
+            disabled={loading}
+          >
+            📊 이번 주
+          </button>
         </div>
         <div>
           <button 
             className="btn btn-primary"
-            onClick={loadInitialData}
+            onClick={() => fetchSchedulesForMonth(currentDate)}
             disabled={loading}
           >
             🔄 새로고침
@@ -407,6 +554,7 @@ function BusSchedule() {
             events={getCalendarEvents()}
             dateClick={handleDateClick}
             eventClick={handleEventClick}
+            datesSet={handleDatesSet}
             height="700px"
             eventTimeFormat={{
               hour: '2-digit',
