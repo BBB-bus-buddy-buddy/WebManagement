@@ -1,4 +1,4 @@
-// components/StationManagement.js - 조직명 표시 개선
+// components/StationManagement.js - 조직명 표시 개선 + 주소 정보 추가
 import React, { useState, useEffect, useRef } from 'react';
 import ApiService from '../services/api';
 import '../styles/StationManagement.css';
@@ -16,6 +16,9 @@ function StationManagement() {
   const editMarkerRef = useRef(null);
   const detailMarkerRef = useRef(null);
 
+  // Geocoder ref
+  const geocoderRef = useRef(null);
+
   // State
   const [stations, setStations] = useState([]);
   const [selectedStation, setSelectedStation] = useState(null);
@@ -27,6 +30,12 @@ function StationManagement() {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [organizationName, setOrganizationName] = useState('');
+  
+  // 주소 정보 state 추가
+  const [selectedStationAddress, setSelectedStationAddress] = useState('');
+  const [newStationAddress, setNewStationAddress] = useState('');
+  const [editStationAddress, setEditStationAddress] = useState('');
+  
   const [newStation, setNewStation] = useState({
     name: '',
     location: {
@@ -91,6 +100,7 @@ function StationManagement() {
     if (window.kakao && window.kakao.maps) {
       console.log("카카오맵 스크립트가 이미 로드되어 있습니다.");
       setMapLoaded(true);
+      initializeGeocoder();
       return;
     }
 
@@ -105,8 +115,41 @@ function StationManagement() {
       window.kakao.maps.load(() => {
         console.log("카카오맵 로드 완료");
         setMapLoaded(true);
+        initializeGeocoder();
       });
     };
+  };
+
+  // Geocoder 초기화
+  const initializeGeocoder = () => {
+    if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+      geocoderRef.current = new window.kakao.maps.services.Geocoder();
+      console.log("Geocoder 초기화 완료");
+    }
+  };
+
+  // 좌표를 주소로 변환하는 함수
+  const getAddressFromCoords = (lat, lng, callback) => {
+    if (!geocoderRef.current) {
+      console.error("Geocoder가 초기화되지 않았습니다.");
+      callback("주소 정보를 가져올 수 없습니다.");
+      return;
+    }
+
+    geocoderRef.current.coord2Address(lng, lat, (result, status) => {
+      if (status === window.kakao.maps.services.Status.OK) {
+        let address = '';
+        if (result[0].road_address) {
+          address = result[0].road_address.address_name;
+        } else {
+          address = result[0].address.address_name;
+        }
+        callback(address);
+      } else {
+        console.error("주소 변환 실패:", status);
+        callback("주소 정보를 가져올 수 없습니다.");
+      }
+    });
   };
 
   // 맵 상태가 변경되면 맵 초기화 실행
@@ -122,18 +165,38 @@ function StationManagement() {
     if (selectedStation && mapContainerRef.current && !showEditForm) {
       console.log("상세 지도 초기화");
       initDetailMap();
+      // 선택된 정류장의 주소 조회
+      const lat = selectedStation.location.coordinates[0];
+      const lng = selectedStation.location.coordinates[1];
+      getAddressFromCoords(lat, lng, (address) => {
+        setSelectedStationAddress(address);
+      });
     }
     
     if (showAddForm && addMapContainerRef.current) {
       console.log("등록 지도 초기화");
       initAddMap();
+      // 새 정류장 초기 주소 조회
+      const lat = newStation.location.coordinates[0];
+      const lng = newStation.location.coordinates[1];
+      getAddressFromCoords(lat, lng, (address) => {
+        setNewStationAddress(address);
+      });
     }
     
     if (showEditForm && editMapContainerRef.current) {
       console.log("수정 지도 초기화");
       initEditMap();
+      // 수정할 정류장의 주소 조회
+      if (editStation) {
+        const lat = editStation.location.coordinates[0];
+        const lng = editStation.location.coordinates[1];
+        getAddressFromCoords(lat, lng, (address) => {
+          setEditStationAddress(address);
+        });
+      }
     }
-  }, [selectedStation, showAddForm, showEditForm, mapLoaded]);
+  }, [selectedStation, showAddForm, showEditForm, mapLoaded, newStation.location.coordinates, editStation]);
 
   // 현재 조직의 정류장만 가져오기
   const fetchStations = async () => {
@@ -288,12 +351,20 @@ function StationManagement() {
         const latlng = mouseEvent.latLng;
         marker.setPosition(latlng);
         
+        const newLat = latlng.getLat();
+        const newLng = latlng.getLng();
+        
         setNewStation({
           ...newStation,
           location: {
             type: 'Point',
-            coordinates: [latlng.getLat(), latlng.getLng()]
+            coordinates: [newLat, newLng]
           }
+        });
+
+        // 클릭한 위치의 주소 조회
+        getAddressFromCoords(newLat, newLng, (address) => {
+          setNewStationAddress(address);
         });
       });
       
@@ -351,12 +422,20 @@ function StationManagement() {
         const latlng = mouseEvent.latLng;
         marker.setPosition(latlng);
         
+        const newLat = latlng.getLat();
+        const newLng = latlng.getLng();
+        
         setEditStation({
           ...editStation,
           location: {
             type: 'Point',
-            coordinates: [latlng.getLat(), latlng.getLng()]
+            coordinates: [newLat, newLng]
           }
+        });
+
+        // 클릭한 위치의 주소 조회
+        getAddressFromCoords(newLat, newLng, (address) => {
+          setEditStationAddress(address);
         });
       });
       
@@ -378,27 +457,27 @@ function StationManagement() {
   };
 
   const handleAddStationClick = () => {
-  setSelectedStation(null);
-  setShowAddForm(true);
-  setShowEditForm(false);
-  
-  // 울산 중심 좌표: 위도 35.5665, 경도 129.3780
-  setNewStation({
-    name: '',
-    location: {
-      type: 'Point',
-      coordinates: [35.5665, 129.3780]
-    }
-  });
-  
-  // 맵 초기화 타이밍을 더 길게 조정
-  setTimeout(() => {
-    if (mapLoaded && addMapContainerRef.current) {
-      console.log('정류장 등록 맵 초기화 시도');
-      initAddMap();
-    }
-  }, 200);
-};
+    setSelectedStation(null);
+    setShowAddForm(true);
+    setShowEditForm(false);
+    
+    // 울산 중심 좌표: 위도 35.5665, 경도 129.3780
+    setNewStation({
+      name: '',
+      location: {
+        type: 'Point',
+        coordinates: [35.5665, 129.3780]
+      }
+    });
+    
+    // 맵 초기화 타이밍을 더 길게 조정
+    setTimeout(() => {
+      if (mapLoaded && addMapContainerRef.current) {
+        console.log('정류장 등록 맵 초기화 시도');
+        initAddMap();
+      }
+    }, 200);
+  };
 
   const handleDeleteStation = async (id) => {
     if (window.confirm('정말로 이 정류장을 삭제하시겠습니까?')) {
@@ -433,89 +512,91 @@ function StationManagement() {
   };
 
   // 조직 정류장 등록 함수 (POST) - 수정과 동일한 형식으로 수정
-const handleAddStation = async (e) => {
-  e.preventDefault();
-  
-  try {
-    setLoading(true);
-    setError(null);
+  const handleAddStation = async (e) => {
+    e.preventDefault();
     
-    console.log('정류장 등록 요청 데이터:', newStation);
-    
-    const response = await ApiService.addStation(newStation);
-    
-    console.log('서버 응답:', response);
-    if (response && response.data) {
-      setStations([...stations, response.data]);
-      setShowAddForm(false);
-      setNewStation({
-        name: '',
-        location: {
-          type: 'Point',
-          coordinates: [35.5665, 129.3780] // [위도, 경도] 형식으로 초기화
-        }
-      });
-      alert('정류장이 성공적으로 등록되었습니다.');
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('정류장 등록 요청 데이터:', newStation);
+      
+      const response = await ApiService.addStation(newStation);
+      
+      console.log('서버 응답:', response);
+      if (response && response.data) {
+        setStations([...stations, response.data]);
+        setShowAddForm(false);
+        setNewStation({
+          name: '',
+          location: {
+            type: 'Point',
+            coordinates: [35.5665, 129.3780] // [위도, 경도] 형식으로 초기화
+          }
+        });
+        setNewStationAddress(''); // 주소 초기화
+        alert('정류장이 성공적으로 등록되었습니다.');
+      }
+    } catch (err) {
+      console.error('Error adding station:', err);
+      setError(`정류장 등록에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Error adding station:', err);
-    setError(`정류장 등록에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleEditStationClick = () => {
-  setShowEditForm(true);
-  setEditStation({...selectedStation});
-  
-  // 맵 초기화 타이밍을 더 길게 조정
-  setTimeout(() => {
-    if (mapLoaded && editMapContainerRef.current) {
-      console.log('정류장 수정 맵 초기화 시도');
-      initEditMap();
-    }
-  }, 200);
-};
+    setShowEditForm(true);
+    setEditStation({...selectedStation});
+    
+    // 맵 초기화 타이밍을 더 길게 조정
+    setTimeout(() => {
+      if (mapLoaded && editMapContainerRef.current) {
+        console.log('정류장 수정 맵 초기화 시도');
+        initEditMap();
+      }
+    }, 200);
+  };
 
   // 조직 정류장 수정 함수 - 등록과 동일한 형식으로 수정
-const handleUpdateStation = async (e) => {
-  e.preventDefault();
-  
-  try {
-    setLoading(true);
-    setError(null);
+  const handleUpdateStation = async (e) => {
+    e.preventDefault();
     
-    console.log('정류장 수정 요청 데이터:', editStation);
-    
-    const response = await ApiService.updateStation(editStation.id, editStation);
-    
-    console.log('서버 응답:', response);
-    
-    if (response) {
-      // 성공 시 목록 갱신
-      await fetchStations();
-      setShowEditForm(false);
+    try {
+      setLoading(true);
+      setError(null);
       
-      // 선택된 정류장 정보 갱신
-      const updatedStations = await ApiService.apiRequest('station');
-      const updatedStation = updatedStations.data.find(s => s.id === editStation.id);
+      console.log('정류장 수정 요청 데이터:', editStation);
       
-      if (updatedStation) {
-        setSelectedStation(updatedStation);
-      } else {
-        setSelectedStation(null);
+      const response = await ApiService.updateStation(editStation.id, editStation);
+      
+      console.log('서버 응답:', response);
+      
+      if (response) {
+        // 성공 시 목록 갱신
+        await fetchStations();
+        setShowEditForm(false);
+        
+        // 선택된 정류장 정보 갱신
+        const updatedStations = await ApiService.apiRequest('station');
+        const updatedStation = updatedStations.data.find(s => s.id === editStation.id);
+        
+        if (updatedStation) {
+          setSelectedStation(updatedStation);
+        } else {
+          setSelectedStation(null);
+        }
+        
+        setEditStationAddress(''); // 주소 초기화
+        alert('정류장이 성공적으로 수정되었습니다.');
       }
-      
-      alert('정류장이 성공적으로 수정되었습니다.');
+    } catch (err) {
+      console.error('Error updating station:', err);
+      setError(`정류장 수정에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.error('Error updating station:', err);
-    setError(`정류장 수정에 실패했습니다: ${err.message || '알 수 없는 오류'}`);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleSearch = (e) => {
     const query = e.target.value;
@@ -530,123 +611,131 @@ const handleUpdateStation = async (e) => {
     }, 500);
   };
 
-  // renderStationForm 함수 수정 - ref 참조 문제 해결
-const renderStationForm = (isEdit = false) => {
-  const formData = isEdit ? editStation : newStation;
-  
-  return (
-    <form onSubmit={isEdit ? handleUpdateStation : handleAddStation} className="station-form">
-      <div className="form-group">
-        <label htmlFor={`${isEdit ? 'edit' : 'new'}-name`}>정류장 이름</label>
-        <input 
-          type="text" 
-          id={`${isEdit ? 'edit' : 'new'}-name`} 
-          name="name" 
-          value={formData.name} 
-          onChange={isEdit ? handleEditInputChange : handleInputChange} 
-          required 
-        />
-      </div>
-      
-      <div className="form-group">
-        <label>정류장 위치</label>
-        <div 
-          ref={isEdit ? editMapContainerRef : addMapContainerRef}
-          className="map-container" 
-          style={{ width: '100%', height: '300px', marginBottom: '15px' }}
-        ></div>
-        <p className="map-help-text">지도를 클릭하여 정류장 위치를 지정하세요</p>
-      </div>
-      
-      <div className="form-group">
-        <label>좌표</label>
-        <div className="coordinates-display">
-          <span>위도: {formData.location?.coordinates[0]?.toFixed(6) || '로딩 중...'}</span>
-          <span>경도: {formData.location?.coordinates[1]?.toFixed(6) || '로딩 중...'}</span>
+  // renderStationForm 함수 수정 - 주소 정보 표시 추가
+  const renderStationForm = (isEdit = false) => {
+    const formData = isEdit ? editStation : newStation;
+    const addressData = isEdit ? editStationAddress : newStationAddress;
+    
+    return (
+      <form onSubmit={isEdit ? handleUpdateStation : handleAddStation} className="station-form">
+        <div className="form-group">
+          <label htmlFor={`${isEdit ? 'edit' : 'new'}-name`}>정류장 이름</label>
+          <input 
+            type="text" 
+            id={`${isEdit ? 'edit' : 'new'}-name`} 
+            name="name" 
+            value={formData.name} 
+            onChange={isEdit ? handleEditInputChange : handleInputChange} 
+            required 
+          />
         </div>
-      </div>
-      
-      <div className="form-actions">
-        <button type="submit" className="save-button" disabled={loading}>
-          {loading ? '처리 중...' : (isEdit ? '저장' : '등록')}
-        </button>
-        <button 
-          type="button" 
-          className="cancel-button"
-          onClick={() => isEdit ? setShowEditForm(false) : setShowAddForm(false)}
-          disabled={loading}
-        >
-          취소
-        </button>
-      </div>
-    </form>
-  );
-};
-
-  return (
-  <div className="station-management">
-    <div className="management-header">
-      <h1>정류장 관리</h1>
-    </div>
-    
-    {error && <div className="error-message">{error}</div>}
-    {!mapLoaded && <div className="loading-message">지도를 로딩 중입니다...</div>}
-    
-    <div className="management-container">
-      <div className="list-section">
-        <div className="list-header">
-          <h2>정류장 목록</h2>
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="정류장 이름으로 검색"
-              value={searchQuery}
-              onChange={handleSearch}
-            />
+        
+        <div className="form-group">
+          <label>정류장 위치</label>
+          <div 
+            ref={isEdit ? editMapContainerRef : addMapContainerRef}
+            className="map-container" 
+            style={{ width: '100%', height: '300px', marginBottom: '15px' }}
+          ></div>
+          <p className="map-help-text">지도를 클릭하여 정류장 위치를 지정하세요</p>
+        </div>
+        
+        <div className="form-group">
+          <label>주소</label>
+          <div className="address-display">
+            <span>{addressData || '주소 정보를 불러오는 중...'}</span>
           </div>
-          <button onClick={handleAddStationClick} className="add-button">
-            +
+        </div>
+        
+        <div className="form-group">
+          <label>좌표</label>
+          <div className="coordinates-display">
+            <span>위도: {formData.location?.coordinates[0]?.toFixed(6) || '로딩 중...'}</span>
+            <span>경도: {formData.location?.coordinates[1]?.toFixed(6) || '로딩 중...'}</span>
+          </div>
+        </div>
+        
+        <div className="form-actions">
+          <button type="submit" className="save-button" disabled={loading}>
+            {loading ? '처리 중...' : (isEdit ? '저장' : '등록')}
+          </button>
+          <button 
+            type="button" 
+            className="cancel-button"
+            onClick={() => isEdit ? setShowEditForm(false) : setShowAddForm(false)}
+            disabled={loading}
+          >
+            취소
           </button>
         </div>
-        
-        <div className="station-list">
-          {loading ? (
-            <div className="loading">로딩 중...</div>
-          ) : !Array.isArray(filteredStations) ? (
-            <div className="empty-list">데이터 형식이 올바르지 않습니다.</div>
-          ) : filteredStations.length === 0 ? (
-            <div className="empty-list">
-              {searchQuery ? '검색 결과가 없습니다.' : '등록된 정류장이 없습니다.'}
-            </div>
-          ) : (
-            filteredStations.map(station => (
-              <div 
-                key={station.id} 
-                className={`station-item ${selectedStation && selectedStation.id === station.id ? 'selected' : ''}`}
-                onClick={() => handleStationClick(station)}
-              >
-                <div className="station-info">
-                  <h3>{station.name}</h3>
-                  <p className="station-coords">
-                    위도: {station.location?.coordinates[0]?.toFixed(4)}, 
-                    경도: {station.location?.coordinates[1]?.toFixed(4)}
-                  </p>
-                </div>
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteStation(station.id);
-                  }} 
-                  className="delete-button"
-                >
-                  삭제
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+      </form>
+    );
+  };
+
+  return (
+    <div className="station-management">
+      <div className="management-header">
+        <h1>정류장 관리</h1>
       </div>
-        
+      
+      {error && <div className="error-message">{error}</div>}
+      {!mapLoaded && <div className="loading-message">지도를 로딩 중입니다...</div>}
+      
+      <div className="management-container">
+        <div className="list-section">
+          <div className="list-header">
+            <h2>정류장 목록</h2>
+            <div className="search-bar">
+              <input
+                type="text"
+                placeholder="정류장 이름으로 검색"
+                value={searchQuery}
+                onChange={handleSearch}
+              />
+            </div>
+            <button onClick={handleAddStationClick} className="add-button">
+              +
+            </button>
+          </div>
+          
+          <div className="station-list">
+            {loading ? (
+              <div className="loading">로딩 중...</div>
+            ) : !Array.isArray(filteredStations) ? (
+              <div className="empty-list">데이터 형식이 올바르지 않습니다.</div>
+            ) : filteredStations.length === 0 ? (
+              <div className="empty-list">
+                {searchQuery ? '검색 결과가 없습니다.' : '등록된 정류장이 없습니다.'}
+              </div>
+            ) : (
+              filteredStations.map(station => (
+                <div 
+                  key={station.id} 
+                  className={`station-item ${selectedStation && selectedStation.id === station.id ? 'selected' : ''}`}
+                  onClick={() => handleStationClick(station)}
+                >
+                  <div className="station-info">
+                    <h3>{station.name}</h3>
+                    <p className="station-coords">
+                      위도: {station.location?.coordinates[0]?.toFixed(4)}, 
+                      경도: {station.location?.coordinates[1]?.toFixed(4)}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteStation(station.id);
+                    }} 
+                    className="delete-button"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+          
         <div className="detail-section">
           {selectedStation && !showEditForm ? (
             <div className="station-details">
@@ -659,6 +748,10 @@ const renderStationForm = (isEdit = false) => {
                 <div className="detail-row">
                   <label>정류장 이름:</label>
                   <span>{selectedStation.name}</span>
+                </div>
+                <div className="detail-row">
+                  <label>주소:</label>
+                  <span>{selectedStationAddress || '주소 정보를 불러오는 중...'}</span>
                 </div>
                 <div className="detail-row">
                   <label>좌표:</label>
