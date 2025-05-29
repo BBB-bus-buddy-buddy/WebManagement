@@ -47,27 +47,44 @@ function BusManagement() {
       const busData = await ApiService.getAllBuses();
       
       console.log('받아온 버스 데이터:', busData);
-      console.log('버스 개수:', busData.length);
       
-      if (busData.length > 0) {
-        console.log('첫 번째 버스 샘플:', busData[0]);
+      // 응답 데이터 검증 및 정규화
+      let normalizedBusData = [];
+      
+      if (Array.isArray(busData)) {
+        normalizedBusData = busData;
+      } else if (busData && busData.data && Array.isArray(busData.data)) {
+        normalizedBusData = busData.data;
+      } else if (busData && typeof busData === 'object') {
+        // 단일 객체인 경우 배열로 감싸기
+        normalizedBusData = [busData];
+      } else {
+        console.warn('예상치 못한 버스 데이터 형태:', busData);
+        normalizedBusData = [];
+      }
+      
+      console.log('정규화된 버스 데이터:', normalizedBusData);
+      console.log('버스 개수:', normalizedBusData.length);
+      
+      if (normalizedBusData.length > 0) {
+        console.log('첫 번째 버스 샘플:', normalizedBusData[0]);
         
         // 각 버스의 조직명을 미리 가져와서 캐시
-        const uniqueOrgIds = [...new Set(busData.map(bus => bus.organizationId).filter(Boolean))];
+        const uniqueOrgIds = [...new Set(normalizedBusData.map(bus => bus.organizationId).filter(Boolean))];
         console.log('조직 ID 목록:', uniqueOrgIds);
         
         // 모든 조직명을 병렬로 가져오기
         await Promise.all(uniqueOrgIds.map(orgId => fetchOrganizationName(orgId)));
       }
       
-      setBuses(busData);
+      setBuses(normalizedBusData);
       console.log('===== 버스 목록 조회 완료 =====');
       
     } catch (err) {
       console.error('===== 버스 목록 조회 실패 =====');
       console.error('오류:', err);
       setError(`버스 정보를 불러오는데 실패했습니다: ${err.message}`);
-      setBuses([]);
+      setBuses([]); // 에러 시 빈 배열로 설정
     } finally {
       setLoading(false);
     }
@@ -185,6 +202,27 @@ function BusManagement() {
     return '노선 정보 없음';
   };
 
+  // 안전한 버스 필터링 함수
+  const getFilteredBuses = () => {
+    // buses가 배열인지 확인
+    if (!Array.isArray(buses)) {
+      console.warn('buses가 배열이 아닙니다:', buses);
+      return [];
+    }
+
+    if (!searchTerm) {
+      return buses;
+    }
+
+    return buses.filter(bus => {
+      const busNumber = bus.busNumber?.toString().toLowerCase() || '';
+      const routeName = getRouteName(bus).toLowerCase();
+      const search = searchTerm.toLowerCase();
+      
+      return busNumber.includes(search) || routeName.includes(search);
+    });
+  };
+
   // 버스 클릭 핸들러
   const handleBusClick = (bus) => {
     setSelectedBus(bus);
@@ -212,7 +250,8 @@ function BusManagement() {
     if (window.confirm('정말로 이 버스를 삭제하시겠습니까?')) {
       try {
         await ApiService.deleteBus(busNumber);
-        setBuses(buses.filter(bus => bus.busNumber !== busNumber));
+        // 안전한 방식으로 필터링
+        setBuses(prevBuses => Array.isArray(prevBuses) ? prevBuses.filter(bus => bus.busNumber !== busNumber) : []);
         if (selectedBus && selectedBus.busNumber === busNumber) {
           setSelectedBus(null);
         }
@@ -376,7 +415,7 @@ function BusManagement() {
         await fetchBuses();
         
         // 선택된 버스 정보 업데이트
-        const updatedBus = buses.find(bus => bus.busNumber === editBus.busNumber);
+        const updatedBus = Array.isArray(buses) ? buses.find(bus => bus.busNumber === editBus.busNumber) : null;
         if (updatedBus) {
           setSelectedBus({ ...updatedBus, ...busDataToUpdate });
         }
@@ -396,6 +435,9 @@ function BusManagement() {
     }
   };
 
+  // 필터된 버스 목록 가져오기
+  const filteredBuses = getFilteredBuses();
+
   return (
     <div className="bus-management">
       <h1>버스 관리</h1>
@@ -408,6 +450,8 @@ function BusManagement() {
           <div style={{ marginBottom: '20px', padding: '10px', backgroundColor: '#ffebee', border: '1px solid #f44336', borderRadius: '4px' }}>
             <h4>오류 발생:</h4>
             <p>{error}</p>
+            <p>현재 buses 타입: {Array.isArray(buses) ? '배열' : typeof buses}</p>
+            <p>buses 내용: {JSON.stringify(buses)}</p>
             <button onClick={fetchBuses} style={{ marginTop: '10px', padding: '8px 16px', backgroundColor: '#1976d2', color: 'white', border: 'none', borderRadius: '4px' }}>
               다시 시도
             </button>
@@ -455,26 +499,14 @@ function BusManagement() {
             </div>
           </div>
           <div className="bus-list">
-            {loading && buses.length === 0 ? (
+            {loading && filteredBuses.length === 0 ? (
               <div className="loading">로딩 중...</div>
-            ) : buses.filter(bus => {
-                const busNumber = bus.busNumber?.toString().toLowerCase() || '';
-                const routeName = getRouteName(bus).toLowerCase();
-                const search = searchTerm.toLowerCase();
-                
-                return busNumber.includes(search) || routeName.includes(search);
-              }).length === 0 ? (
+            ) : filteredBuses.length === 0 ? (
               <div className="empty-list">
                 {searchTerm ? '검색 결과가 없습니다.' : '등록된 버스가 없습니다.'}
               </div>
             ) : (
-              buses.filter(bus => {
-                const busNumber = bus.busNumber?.toString().toLowerCase() || '';
-                const routeName = getRouteName(bus).toLowerCase();
-                const search = searchTerm.toLowerCase();
-                
-                return busNumber.includes(search) || routeName.includes(search);
-              }).map(bus => (
+              filteredBuses.map(bus => (
                 <div
                   key={bus.busNumber}
                   className={`bus-item ${selectedBus && selectedBus.busNumber === bus.busNumber ? 'selected' : ''}`}
