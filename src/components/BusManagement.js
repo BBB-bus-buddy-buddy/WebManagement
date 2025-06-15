@@ -16,10 +16,12 @@ function BusManagement() {
   const [organizationNames, setOrganizationNames] = useState({}); // 조직 ID별 조직명 캐시
   const [editBus, setEditBus] = useState({
     busNumber: '',
+    busRealNumber: '',
     routeId: '',
     totalSeats: 45
   });
   const [newBus, setNewBus] = useState({
+    busRealNumber: '',
     routeId: '',
     totalSeats: 45
   });
@@ -237,6 +239,7 @@ function BusManagement() {
     setShowEditForm(false);
     
     const initialBusData = {
+      busRealNumber: '',
       routeId: routes.length > 0 ? routes[0].id : '',
       totalSeats: 45
     };
@@ -306,6 +309,10 @@ function BusManagement() {
       console.log('폼 데이터:', newBus);
       
       // 클라이언트 검증
+      if (!newBus.busRealNumber) {
+        alert('버스 번호를 입력해주세요.');
+        return;
+      }
       if (!newBus.routeId) {
         alert('노선을 선택해주세요.');
         return;
@@ -317,6 +324,7 @@ function BusManagement() {
       
       // 버스 데이터 구성 (서버 스펙에 맞게)
       const busDataToAdd = {
+        busRealNumber: newBus.busRealNumber,
         routeId: newBus.routeId,
         totalSeats: Number(newBus.totalSeats)
       };
@@ -334,13 +342,14 @@ function BusManagement() {
         // 폼 초기화
         setShowAddForm(false);
         setNewBus({
+          busRealNumber: '',
           routeId: routes.length > 0 ? routes[0].id : '',
           totalSeats: 45
         });
         
         // 성공 메시지
         const busNumber = response.busNumber || '알 수 없음';
-        alert(`버스가 성공적으로 등록되었습니다!\n버스 번호: ${busNumber}\n노선: ${getRouteNameById(newBus.routeId)}\n좌석 수: ${newBus.totalSeats}석`);
+        alert(`버스가 성공적으로 등록되었습니다!\n가상 버스 번호: ${busNumber}\n실제 버스 번호: ${newBus.busRealNumber}\n노선: ${getRouteNameById(newBus.routeId)}\n좌석 수: ${newBus.totalSeats}석`);
         
         console.log('===== 버스 등록 완료 =====');
       }
@@ -363,6 +372,7 @@ function BusManagement() {
       
       const busToEdit = {
         busNumber: selectedBus.busNumber,
+        busRealNumber: selectedBus.busRealNumber || '',
         routeId: selectedBus.routeId || '',
         totalSeats: selectedBus.totalSeats || 45
       };
@@ -388,6 +398,10 @@ function BusManagement() {
         alert('버스 번호가 필요합니다.');
         return;
       }
+      if (!editBus.busRealNumber) {
+        alert('실제 버스 번호를 입력해주세요.');
+        return;
+      }
       if (!editBus.routeId) {
         alert('노선을 선택해주세요.');
         return;
@@ -400,6 +414,7 @@ function BusManagement() {
       // 버스 수정 데이터 구성 (서버 스펙에 맞게)
       const busDataToUpdate = {
         busNumber: editBus.busNumber,
+        busRealNumber: editBus.busRealNumber,
         routeId: editBus.routeId,
         totalSeats: Number(editBus.totalSeats)
       };
@@ -424,7 +439,7 @@ function BusManagement() {
         setShowEditForm(false);
         
         // 성공 메시지
-        alert(`버스 정보가 성공적으로 수정되었습니다!\n버스 번호: ${editBus.busNumber}\n노선: ${getRouteNameById(editBus.routeId)}\n좌석 수: ${editBus.totalSeats}석`);
+        alert(`버스 정보가 성공적으로 수정되었습니다!\n가상 버스 번호: ${editBus.busNumber}\n실제 버스 번호: ${editBus.busRealNumber}\n노선: ${getRouteNameById(editBus.routeId)}\n좌석 수: ${editBus.totalSeats}석`);
         
         console.log('===== 버스 수정 완료 =====');
       }
@@ -495,7 +510,7 @@ function BusManagement() {
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <button onClick={handleAddBusClick} className="add-button">+ 버스 등록</button>
+              <button onClick={handleAddBusClick} className="add-button">+</button>
             </div>
           </div>
           <div className="bus-list">
@@ -544,8 +559,14 @@ function BusManagement() {
                 <div>
                   <div className="detail-info">
                     <div className="detail-row">
-                      <label>버스 번호:</label>
+                      <label>가상 버스 번호:</label>
                       <span className="detail-value">{selectedBus.busNumber}</span>
+                    </div>
+                    <div className="detail-row">
+                      <label>실제 버스 번호:</label>
+                      <span className="detail-value highlight">
+                        {selectedBus.busRealNumber || '정보 없음'}
+                      </span>
                     </div>
                     <div className="detail-row">
                       <label>운행 노선:</label>
@@ -595,11 +616,11 @@ function BusManagement() {
                 <div className="edit-bus-form">
                   <h3>버스 정보 수정</h3>
                   <div className="form-notice">
-                    <p>※ 버스 번호, 운행 상태, 조직 정보, 위치 정보는 시스템에서 자동으로 관리되며 수정할 수 없습니다.</p>
+                    <p>※ 가상 버스 번호, 운행 상태, 조직 정보, 위치 정보는 시스템에서 자동으로 관리되며 수정할 수 없습니다.</p>
                   </div>
                   <form onSubmit={handleUpdateBus} className="bus-form">
                     <div className="form-group">
-                      <label htmlFor="edit-busNumber">버스 번호</label>
+                      <label htmlFor="edit-busNumber">가상 버스 번호</label>
                       <input 
                         type="text" 
                         id="edit-busNumber" 
@@ -610,7 +631,21 @@ function BusManagement() {
                         readOnly
                         style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
                       />
-                      <small className="form-hint">버스 번호는 변경할 수 없습니다.</small>
+                      <small className="form-hint">가상 버스 번호는 변경할 수 없습니다.</small>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label htmlFor="edit-busRealNumber">실제 버스 번호 *</label>
+                      <input 
+                        type="text" 
+                        id="edit-busRealNumber" 
+                        name="busRealNumber" 
+                        value={editBus.busRealNumber} 
+                        onChange={handleBusInputChange} 
+                        required 
+                        placeholder="예: 울산 74가 1234"
+                      />
+                      <small className="form-hint">버스의 실제 차량 번호를 입력하세요.</small>
                     </div>
                     
                     <div className="form-group">
@@ -666,8 +701,22 @@ function BusManagement() {
               <h2>새 버스 등록</h2>
               <form onSubmit={handleAddBus} className="bus-form">
                 <div className="form-notice">
-                  <p>※ 버스 번호는 시스템에서 자동으로 생성됩니다.</p>
+                  <p>※ 가상 버스 번호는 시스템에서 자동으로 생성됩니다.</p>
                   <p>※ 운행 상태, 조직 정보, 위치 정보는 시스템에서 자동으로 관리됩니다.</p>
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="busRealNumber">실제 버스 번호 *</label>
+                  <input
+                    type="text"
+                    id="busRealNumber"
+                    name="busRealNumber"
+                    value={newBus.busRealNumber}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="예: 울산 74가 1234"
+                  />
+                  <small className="form-hint">버스의 실제 차량 번호를 입력하세요.</small>
                 </div>
                 
                 <div className="form-group">

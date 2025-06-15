@@ -214,14 +214,114 @@ static logout() {
   }
   
   /**
-   * 버스 기사 배치표 추가
-   * @param {Object} operationPlanData 추가할 배치표 데이터
-   * @returns {Promise<Object>} 추가된 배치표 정보
-   */
-  static async addOperationPlan(operationPlanData) {
-    const data = await ApiService.apiRequest('operationplan', 'POST', operationPlanData);
-    return data;
+ * 버스 기사 배치표 추가
+ * @param {Object} operationPlanData 추가할 배치표 데이터
+ * @returns {Promise<Object>} 추가된 배치표 정보
+ */
+static async addOperationPlan(operationPlanData) {
+  try {
+    console.log('운행 일정 추가 요청 (원본):', operationPlanData);
+    
+    // 필수 데이터 검증
+    if (!operationPlanData.busNumber) {
+      throw new Error('버스 번호가 필요합니다.');
+    }
+    if (!operationPlanData.driverId) {
+      throw new Error('기사 ID가 필요합니다.');
+    }
+    if (!operationPlanData.operationDate) {
+      throw new Error('운행 날짜가 필요합니다.');
+    }
+    
+    // busId 검증 - MongoDB ObjectId 형식인지 확인
+    let validBusId = operationPlanData.busId;
+    
+    // busId가 없거나 유효하지 않은 경우 빈 문자열로 처리
+    if (!validBusId) {
+      console.log('⚠️ busId가 제공되지 않았습니다.');
+      validBusId = '';
+    } else if (!/^[0-9a-fA-F]{24}$/.test(validBusId)) {
+      console.warn(`⚠️ busId가 MongoDB ObjectId 형식이 아닙니다: ${validBusId}`);
+      validBusId = '';
+    } else {
+      console.log('✅ 유효한 busId:', validBusId);
+    }
+    
+    // 요청 데이터를 백엔드 DTO 형식에 맞게 변환
+    const requestData = {
+      busId: validBusId, // 검증된 busId 사용
+      busNumber: operationPlanData.busNumber || '', // 버스 번호
+      driverId: String(operationPlanData.driverId), // 문자열로 변환
+      routeId: operationPlanData.routeId ? String(operationPlanData.routeId) : '', // 노선 ID
+      operationDate: operationPlanData.operationDate, // YYYY-MM-DD 형식
+      startTime: operationPlanData.startTime || '08:00', // HH:MM 형식
+      endTime: operationPlanData.endTime || '17:00', // HH:MM 형식
+      isRecurring: Boolean(operationPlanData.isRecurring), // 불린 값으로 변환
+      recurringWeeks: operationPlanData.recurringWeeks || null
+    };
+    
+    console.log('최종 요청 데이터:', requestData);
+    console.log('특히 busId:', requestData.busId || '빈 값');
+    console.log('특히 busNumber:', requestData.busNumber);
+    
+    const response = await ApiService.apiRequest('operation-plan', 'POST', requestData);
+    return response;
+  } catch (error) {
+    console.error('운행 일정 추가 실패:', error);
+    throw error;
   }
+}
+
+/**
+ * 운행 일정 수정 - 데이터 검증 강화
+ */
+static async updateOperationPlan(operationPlanData) {
+  try {
+    console.log('운행 일정 수정 요청 (원본):', operationPlanData);
+    
+    // 필수 데이터 검증
+    if (!operationPlanData.id) {
+      throw new Error('운행 일정 ID가 필요합니다.');
+    }
+    
+    // busId 검증 - MongoDB ObjectId 형식인지 확인
+    let validBusId = operationPlanData.busId;
+    
+    // busId가 없거나 유효하지 않은 경우 빈 문자열로 처리
+    if (!validBusId) {
+      console.log('⚠️ busId가 제공되지 않았습니다.');
+      validBusId = '';
+    } else if (!/^[0-9a-fA-F]{24}$/.test(validBusId)) {
+      console.warn(`⚠️ busId가 MongoDB ObjectId 형식이 아닙니다: ${validBusId}`);
+      validBusId = '';
+    } else {
+      console.log('✅ 유효한 busId:', validBusId);
+    }
+    
+    // 요청 데이터를 백엔드 DTO 형식에 맞게 변환
+    const requestData = {
+      id: String(operationPlanData.id),
+      busId: validBusId, // 검증된 busId 사용
+      busNumber: operationPlanData.busNumber || '',
+      driverId: String(operationPlanData.driverId),
+      routeId: operationPlanData.routeId ? String(operationPlanData.routeId) : '',
+      operationDate: operationPlanData.operationDate, // YYYY-MM-DD 형식
+      startTime: operationPlanData.startTime || '08:00', // HH:MM 형식
+      endTime: operationPlanData.endTime || '17:00', // HH:MM 형식
+      status: operationPlanData.status || 'SCHEDULED'
+    };
+    
+    console.log('최종 수정 요청 데이터:', requestData);
+    console.log('특히 busId:', requestData.busId || '빈 값');
+    console.log('특히 busNumber:', requestData.busNumber);
+    
+    const response = await ApiService.apiRequest('operation-plan', 'PUT', requestData);
+    return response;
+  } catch (error) {
+    console.error('운행 일정 수정 실패:', error);
+    throw error;
+  }
+}
   
   /**
    * 버스 기사 배치표 수정
@@ -483,7 +583,7 @@ static async getAllBuses() {
     const normalizedBuses = busData.map(bus => {
       const normalizedBus = {
         // 기본 식별자
-        id: bus.id || bus._id || bus.busNumber,
+        id: bus.busId || bus.id || bus.busNumber,
         busNumber: bus.busNumber, // 서버 필드명 그대로
         busRealNumber: bus.busRealNumber, // 서버 필드명 그대로
         
@@ -533,7 +633,7 @@ static async getAllBuses() {
 }
 
 /**
- * 버스 추가 - 실제 서버 스펙에 맞게 수정 (routeId, totalSeats만)
+ * 버스 추가 - 실제 서버 스펙에 맞게 수정 (busRealNumber, routeId, totalSeats)
  * @param {Object} busData 추가할 버스 데이터
  * @returns {Promise<Object>} 추가된 버스 정보
  */
@@ -543,6 +643,9 @@ static async addBus(busData) {
     console.log('원본 데이터:', busData);
     
     // 필수 데이터 검증
+    if (!busData.busRealNumber) {
+      throw new Error('실제 버스 번호를 입력해주세요.');
+    }
     if (!busData.routeId) {
       throw new Error('노선을 선택해주세요.');
     }
@@ -550,8 +653,9 @@ static async addBus(busData) {
       throw new Error('올바른 좌석 수를 입력해주세요.');
     }
     
-    // 실제 서버 API 스펙에 맞는 요청 데이터 구성 (최소한만)
+    // 실제 서버 API 스펙에 맞는 요청 데이터 구성
     const requestData = {
+      busRealNumber: String(busData.busRealNumber), // 실제 버스 번호 (필수)
       routeId: String(busData.routeId), // 노선 ID (필수)
       totalSeats: Number(busData.totalSeats) // 좌석 수 (필수)
       // operate, lastUpdateTime, organizationId, busNumber 등은 서버에서 자동 생성/관리
@@ -587,7 +691,7 @@ static async addBus(busData) {
 }
 
 /**
- * 버스 수정 - 실제 서버 스펙에 맞게 수정 (busNumber, routeId, totalSeats만)
+ * 버스 수정 - 실제 서버 스펙에 맞게 수정 (busNumber, busRealNumber, routeId, totalSeats)
  * @param {Object} busData 수정할 버스 데이터
  * @returns {Promise<Object>} 수정된 버스 정보
  */
@@ -600,6 +704,9 @@ static async updateBus(busData) {
     if (!busData.busNumber) {
       throw new Error('버스 번호가 필요합니다.');
     }
+    if (!busData.busRealNumber) {
+      throw new Error('실제 버스 번호를 입력해주세요.');
+    }
     if (!busData.routeId) {
       throw new Error('노선을 선택해주세요.');
     }
@@ -607,9 +714,10 @@ static async updateBus(busData) {
       throw new Error('올바른 좌석 수를 입력해주세요.');
     }
     
-    // 실제 서버 API 스펙에 맞는 요청 데이터 구성 (최소한만)
+    // 실제 서버 API 스펙에 맞는 요청 데이터 구성
     const requestData = {
       busNumber: String(busData.busNumber), // 버스 식별자 (필수, 변경 불가)
+      busRealNumber: String(busData.busRealNumber), // 실제 버스 번호 (수정 가능)
       routeId: String(busData.routeId), // 노선 정보 (수정 가능)
       totalSeats: Number(busData.totalSeats) // 좌석 정보 (수정 가능)
       // operate, lastUpdateTime, organizationId 등은 서버에서 자동 관리
