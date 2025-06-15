@@ -15,11 +15,6 @@
   z-index: 10;
 }
 
-.operation-header h1 {
-  margin: 0;
-  color: #333;
-  font-size: 24px;
-}
 
 /* 필터 섹션 */
 .filter-section {
@@ -27,7 +22,7 @@
   border-radius: 8px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin: 20px 20px 0 20px;
+  margin: 0px 20px 0 20px;
 }
 
 .filter-row {
@@ -88,7 +83,7 @@
   flex: 1;
   display: flex;
   margin: 20px;
-  gap: 20px;
+  gap: 10px;
   height: calc(100vh - 200px);
   overflow: hidden;
 }

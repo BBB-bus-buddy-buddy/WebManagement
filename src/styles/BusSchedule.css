@@ -225,8 +225,8 @@
 }
 
 .checkbox-group input[type="checkbox"] {
-  width: auto;
-  margin: 0;
+  width: 16px;
+  margin: 100px;
 }
 
 .checkbox-group label {

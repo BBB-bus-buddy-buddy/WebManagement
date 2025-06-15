@@ -761,9 +761,6 @@ function BusSchedule() {
 
   return (
     <div className="bus-schedule">
-      <div className="header">
-        <h1>🚌 버스 운행 배치표</h1>
-      </div>
       
       <div className="controls">
         <div>
@@ -1058,14 +1055,6 @@ function BusSchedule() {
                   <span className="detail-label">기사명:</span>
                   <span className="detail-value">{selectedSchedule.driverName || '미지정'}</span>
                 </div>
-                {selectedSchedule.driverId && (
-                  <div className="detail-row">
-                    <span className="detail-label">기사 ID:</span>
-                    <span className="detail-value" style={{ fontSize: '12px', color: '#666' }}>
-                      {selectedSchedule.driverId}
-                    </span>
-                  </div>
-                )}
               </div>
               
               <div className="detail-section">
@@ -1084,14 +1073,6 @@ function BusSchedule() {
                     <span className="detail-value">{selectedSchedule.busRealNumber}</span>
                   </div>
                 )}
-                {selectedSchedule.busId && (
-                  <div className="detail-row">
-                    <span className="detail-label">버스 번호:</span>
-                    <span className="detail-value" style={{ fontSize: '12px', color: '#666' }}>
-                      {selectedSchedule.busId}
-                    </span>
-                  </div>
-                )}
               </div>
               
               <div className="detail-section">
@@ -1100,59 +1081,9 @@ function BusSchedule() {
                   <span className="detail-label">노선명:</span>
                   <span className="detail-value">{selectedSchedule.routeName || '미지정'}</span>
                 </div>
-                {selectedSchedule.routeId && (
-                  <div className="detail-row">
-                    <span className="detail-label">노선 ID:</span>
-                    <span className="detail-value" style={{ fontSize: '12px', color: '#666' }}>
-                      {selectedSchedule.routeId}
-                    </span>
-                  </div>
-                )}
               </div>
 
-              {/* 디버깅 정보 (개발 모드에서만 표시) */}
-              {process.env.NODE_ENV === 'development' && (
-                <div className="detail-section">
-                  <h4>🔍 디버깅 정보</h4>
-                  <div className="detail-row">
-                    <span className="detail-label">Schedule ID:</span>
-                    <span className="detail-value" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                      {selectedSchedule.id || '없음'}
-                    </span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Operation ID:</span>
-                    <span className="detail-value" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                      {selectedSchedule.operationId || '없음'}
-                    </span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Selected Bus:</span>
-                    <span className="detail-value" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                      busNumber: {selectedSchedule.busNumber}, busId: {selectedSchedule.busId}
-                    </span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Route Info:</span>
-                    <span className="detail-value" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
-                      routeId: {selectedSchedule.routeId || 'null'}, routeName: {selectedSchedule.routeName || 'null'}
-                    </span>
-                  </div>
-                  <details style={{ marginTop: '10px' }}>
-                    <summary style={{ cursor: 'pointer', fontSize: '12px' }}>전체 데이터 보기</summary>
-                    <pre style={{ 
-                      fontSize: '10px', 
-                      backgroundColor: '#f8f9fa', 
-                      padding: '10px', 
-                      marginTop: '5px',
-                      maxHeight: '200px',
-                      overflow: 'auto'
-                    }}>
-                      {JSON.stringify(selectedSchedule, null, 2)}
-                    </pre>
-                  </details>
-                </div>
-              )}
+              
             </div>
             <div className="button-group">
               <button className="btn btn-warning" onClick={handleEdit} disabled={loading}>

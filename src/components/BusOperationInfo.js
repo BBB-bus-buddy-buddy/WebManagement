@@ -1,4 +1,5 @@
-// components/BusOperationInfo.js - 실제 API 연동 버전
+// components/BusOperationInfo.js - API 연동 개선 버전 (카카오맵 포함)
+// 카카오맵 사용을 위해 .env 파일에 REACT_APP_KAKAO_MAP_KEY=your_api_key 추가 필요
 import React, { useState, useEffect } from 'react';
 import ApiService from '../services/api';
 
@@ -12,9 +13,9 @@ function BusOperationInfo() {
   const [selectedBus, setSelectedBus] = useState(null);
   
   // 날짜 필터 상태
-  const [operationDate, setOperationDate] = useState(new Date().toISOString().split('T')[0]); // 오늘 날짜
-  const [operationWeek, setOperationWeek] = useState(getWeekString(new Date())); // 현재 주
-  const [operationMonth, setOperationMonth] = useState(new Date().toISOString().slice(0, 7)); // 현재 월
+  const [operationDate, setOperationDate] = useState(new Date().toISOString().split('T')[0]);
+  const [operationWeek, setOperationWeek] = useState(getWeekString(new Date()));
+  const [operationMonth, setOperationMonth] = useState(new Date().toISOString().slice(0, 7));
   
   // 검색 필터 상태
   const [busNumberFilter, setBusNumberFilter] = useState('');
@@ -26,11 +27,62 @@ function BusOperationInfo() {
   
   // 조직명 캐시
   const [organizationNames, setOrganizationNames] = useState({});
+  
+  // 버스 정보 캐시 (운행 계획에서 버스 정보 보완용)
+  const [busCache, setBusCache] = useState({});
+  
+  // 기사 정보 캐시
+  const [driverCache, setDriverCache] = useState({});
+  
+  // 카카오맵 관련 상태
+  const [mapInstance, setMapInstance] = useState(null);
+  const [markerInstance, setMarkerInstance] = useState(null);
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     loadData();
   }, [filterType, operationDate, operationWeek, operationMonth]);
+
+  // 카카오맵 스크립트 로드
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.REACT_APP_KAKAO_MAP_KEY || 'YOUR_KAKAO_MAP_API_KEY'}&autoload=false`;
+    script.async = true;
+    
+    script.onload = () => {
+      window.kakao.maps.load(() => {
+        console.log('카카오맵 API 로드 완료');
+      });
+    };
+    
+    document.head.appendChild(script);
+    
+    return () => {
+      // 클린업: 마커와 맵 인스턴스 제거
+      if (markerInstance) {
+        markerInstance.setMap(null);
+      }
+    };
+  }, []);
+
+  // 선택된 버스가 변경될 때 맵 업데이트
+  useEffect(() => {
+    if (selectedBus && selectedBus.latitude && selectedBus.longitude && filterType === 'current') {
+      updateMapLocation(selectedBus.latitude, selectedBus.longitude);
+    }
+  }, [selectedBus]);
+
+  // 실시간 위치 업데이트 (30초마다)
+  useEffect(() => {
+    if (filterType === 'current' && selectedBus) {
+      const interval = setInterval(() => {
+        updateBusLocation(selectedBus.busNumber);
+      }, 30000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [filterType, selectedBus]);
 
   // 주차 문자열 생성 함수
   function getWeekString(date) {
@@ -47,6 +99,12 @@ function BusOperationInfo() {
     setError(null);
     
     try {
+      // 버스 정보는 항상 로드 (캐시용)
+      await loadBusesForCache();
+      
+      // 기사 정보도 로드 (캐시용)
+      await loadDriversForCache();
+      
       if (filterType === 'current') {
         await loadCurrentBuses();
       } else {
@@ -57,6 +115,39 @@ function BusOperationInfo() {
       setError(`데이터를 불러오는데 실패했습니다: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 버스 정보 캐시 로드
+  const loadBusesForCache = async () => {
+    try {
+      const response = await ApiService.getAllBuses();
+      if (response && response.data) {
+        const cache = {};
+        response.data.forEach(bus => {
+          cache[bus.busNumber] = bus;
+          if (bus.id) cache[bus.id] = bus;
+        });
+        setBusCache(cache);
+      }
+    } catch (error) {
+      console.error('버스 캐시 로드 실패:', error);
+    }
+  };
+
+  // 기사 정보 캐시 로드
+  const loadDriversForCache = async () => {
+    try {
+      const response = await ApiService.getOrganizationDrivers();
+      if (response && response.data) {
+        const cache = {};
+        response.data.forEach(driver => {
+          cache[driver.id] = driver;
+        });
+        setDriverCache(cache);
+      }
+    } catch (error) {
+      console.error('기사 캐시 로드 실패:', error);
     }
   };
 
@@ -79,12 +170,11 @@ function BusOperationInfo() {
             
             return {
               ...bus,
-              // 현재 운행 중인 버스에 필요한 추가 정보들
-              direction: bus.currentStationName ? `${bus.currentStationName} 방면` : '정보 없음',
               nextStation: bus.currentStationName || '정보 없음',
-              estimatedArrival: '정보 없음', // API에서 제공하지 않는 경우
-              departureTime: '정보 없음', // API에서 제공하지 않는 경우
-              status: bus.operate ? '정상' : '운행 중지'
+              estimatedArrival: '정보 없음',
+              departureTime: '정보 없음',
+              status: bus.operate ? '정상' : '운행 중지',
+              driverName: '실시간 정보 없음' // 현재 운행 중인 버스는 기사 정보가 없을 수 있음
             };
           })
         );
@@ -119,20 +209,35 @@ function BusOperationInfo() {
       }
       
       if (response && response.data) {
-        // 운행 계획 데이터 정규화
-        const normalizedPlans = response.data.map(plan => ({
-          id: plan.id || plan._id,
-          busNumber: plan.busNumber || '정보 없음',
-          routeName: plan.routeName || '정보 없음',
-          driverName: plan.driverName || '정보 없음',
-          date: plan.operationDate || plan.date,
-          direction: `${plan.routeName} 방면` || '정보 없음',
-          totalPassengers: plan.totalPassengers || Math.floor(Math.random() * 300) + 50, // 임시값
-          startTime: plan.startTime || '정보 없음',
-          endTime: plan.endTime || '정보 없음'
+        // 운행 계획 데이터 정규화 및 보완
+        const normalizedPlans = await Promise.all(response.data.map(async (plan) => {
+          // 버스 정보 보완
+          const busInfo = busCache[plan.busNumber] || busCache[plan.busId] || {};
+          
+          // 기사 정보 보완
+          const driverInfo = driverCache[plan.driverId] || {};
+          
+          return {
+            id: plan.id || plan._id,
+            busNumber: plan.busNumber || busInfo.busNumber || '정보 없음',
+            busRealNumber: busInfo.busRealNumber || plan.busRealNumber || '정보 없음',
+            routeName: plan.routeName || busInfo.routeName || '정보 없음',
+            driverName: plan.driverName || driverInfo.name || '정보 없음',
+            date: plan.operationDate || plan.date,
+            totalPassengers: plan.totalPassengers || 0, // 서버에서 제공하면 사용
+            startTime: plan.startTime || '정보 없음',
+            endTime: plan.endTime || '정보 없음',
+            status: plan.status || 'SCHEDULED',
+            // 추가 정보
+            busId: plan.busId,
+            driverId: plan.driverId,
+            routeId: plan.routeId
+          };
         }));
         
         setOperationPlans(normalizedPlans);
+      } else {
+        setOperationPlans([]);
       }
     } catch (error) {
       console.error('운행 계획 로드 실패:', error);
@@ -181,6 +286,84 @@ function BusOperationInfo() {
     setSelectedBus(bus);
   };
 
+  // 맵 위치 업데이트 함수
+  const updateMapLocation = (lat, lng) => {
+    if (!window.kakao || !window.kakao.maps) {
+      console.error('카카오맵 API가 로드되지 않았습니다.');
+      return;
+    }
+    
+    const mapContainer = document.getElementById('bus-location-map');
+    if (!mapContainer) return;
+    
+    const mapOption = {
+      center: new window.kakao.maps.LatLng(lat, lng),
+      level: 3
+    };
+    
+    // 기존 맵이 없으면 새로 생성
+    if (!mapInstance) {
+      const map = new window.kakao.maps.Map(mapContainer, mapOption);
+      setMapInstance(map);
+      
+      // 마커 생성
+      const markerPosition = new window.kakao.maps.LatLng(lat, lng);
+      const marker = new window.kakao.maps.Marker({
+        position: markerPosition,
+        map: map
+      });
+      
+      // 커스텀 오버레이 생성
+      const content = `
+        <div style="padding:5px 10px; background:white; border:1px solid #333; border-radius:5px;">
+          <strong>버스 ${selectedBus?.busNumber || ''}</strong><br/>
+          ${selectedBus?.currentStationName || '위치 정보'}
+        </div>
+      `;
+      
+      const customOverlay = new window.kakao.maps.CustomOverlay({
+        map: map,
+        position: markerPosition,
+        content: content,
+        yAnchor: 2.5
+      });
+      
+      setMarkerInstance(marker);
+    } else {
+      // 기존 맵과 마커 위치 업데이트
+      const moveLatLon = new window.kakao.maps.LatLng(lat, lng);
+      mapInstance.setCenter(moveLatLon);
+      
+      if (markerInstance) {
+        markerInstance.setPosition(moveLatLon);
+      }
+    }
+  };
+
+  // 실시간 버스 위치 업데이트
+  const updateBusLocation = async (busNumber) => {
+    try {
+      setIsUpdatingLocation(true);
+      const busData = await ApiService.getBus(busNumber);
+      if (busData && busData.latitude && busData.longitude) {
+        setSelectedBus(prev => ({
+          ...prev,
+          latitude: busData.latitude,
+          longitude: busData.longitude,
+          currentStationName: busData.currentStationName,
+          currentStationIndex: busData.currentStationIndex,
+          lastUpdateTime: busData.lastUpdateTime
+        }));
+        
+        updateMapLocation(busData.latitude, busData.longitude);
+      }
+    } catch (error) {
+      console.error('버스 위치 업데이트 실패:', error);
+    } finally {
+      setIsUpdatingLocation(false);
+    }
+  };
+
   // 활성 필터 데이터 가져오기
   const getActiveFilterData = () => {
     if (filterType === 'current') {
@@ -199,7 +382,7 @@ function BusOperationInfo() {
         return false;
       }
       
-      // 기사 이름 필터링 (현재 운행중인 경우 기사 정보가 없을 수 있음)
+      // 기사 이름 필터링
       if (driverNameFilter) {
         const driverName = bus.driverName || '';
         if (!driverName.includes(driverNameFilter)) {
@@ -211,9 +394,38 @@ function BusOperationInfo() {
     });
   };
 
+  // 통계 정보 계산
+  const getStatistics = () => {
+    const filteredBuses = getFilteredBuses();
+    
+    if (filterType === 'current') {
+      const totalBuses = filteredBuses.length;
+      const normalOperation = filteredBuses.filter(bus => bus.status === '정상').length;
+      const totalOccupied = filteredBuses.reduce((sum, bus) => sum + (bus.occupiedSeats || 0), 0);
+      const totalCapacity = filteredBuses.reduce((sum, bus) => sum + (bus.totalSeats || 0), 0);
+      
+      return {
+        totalBuses,
+        normalOperation,
+        occupancyRate: totalCapacity > 0 ? Math.round((totalOccupied / totalCapacity) * 100) : 0
+      };
+    } else {
+      const totalPlans = filteredBuses.length;
+      const completedPlans = filteredBuses.filter(plan => plan.status === 'COMPLETED').length;
+      const totalPassengers = filteredBuses.reduce((sum, plan) => sum + (plan.totalPassengers || 0), 0);
+      
+      return {
+        totalPlans,
+        completedPlans,
+        totalPassengers
+      };
+    }
+  };
+
   // 버스 목록 렌더링
   const renderBusList = () => {
     const filteredBuses = getFilteredBuses();
+    const stats = getStatistics();
     
     if (loading) {
       return <div className="loading">데이터를 불러오는 중...</div>;
@@ -225,12 +437,14 @@ function BusOperationInfo() {
     
     return (
       <div className="bus-operation-list">
-        <h3>
-          {filterType === 'current' ? '현재 운행 중인 버스' : 
-           filterType === 'daily' ? '일별 운행 버스' :
-           filterType === 'weekly' ? '주별 운행 버스' : '월별 운행 버스'}
-          <span className="bus-count"> (총 {filteredBuses.length}대)</span>
-        </h3>
+        <div className="list-header">
+          <h3>
+            {filterType === 'current' ? '현재 운행 중인 버스' : 
+             filterType === 'daily' ? `일별 운행 버스 (${operationDate})` :
+             filterType === 'weekly' ? `주별 운행 버스 (${operationWeek})` : 
+             `월별 운행 버스 (${operationMonth})`}
+          </h3>
+        </div>
         
         <div className="bus-grid">
           {filteredBuses.length === 0 ? (
@@ -240,20 +454,20 @@ function BusOperationInfo() {
           ) : (
             filteredBuses.map(bus => (
               <div 
-                key={bus.id || bus.busNumber} 
-                className={`bus-card ${selectedBus && (selectedBus.id === bus.id || selectedBus.busNumber === bus.busNumber) ? 'selected' : ''}`}
+                key={bus.id || `${bus.busNumber}-${bus.date}`} 
+                className={`bus-card ${selectedBus && (selectedBus.id === bus.id || (selectedBus.busNumber === bus.busNumber && selectedBus.date === bus.date)) ? 'selected' : ''}`}
                 onClick={() => handleBusClick(bus)}
               >
                 <div className="bus-card-header">
                   <h4>버스 {bus.busNumber}</h4>
+                  {bus.busRealNumber && bus.busRealNumber !== bus.busNumber && (
+                    <span className="bus-real-number">({bus.busRealNumber})</span>
+                  )}
                   <span className="bus-route">{bus.routeName || '노선 정보 없음'}</span>
                 </div>
                 <div className="bus-card-body">
                   <div className="driver-info">
                     <span>기사: {bus.driverName || '정보 없음'}</span>
-                  </div>
-                  <div className="direction-info">
-                    <span>방면: {bus.direction}</span>
                   </div>
                   {filterType === 'current' ? (
                     <div className="status-info">
@@ -265,9 +479,17 @@ function BusOperationInfo() {
                       </span>
                     </div>
                   ) : (
-                    <div className="passenger-info">
-                      <span>총 탑승객: {bus.totalPassengers}명</span>
-                    </div>
+                    <>
+                      <div className="time-info">
+                        <span>운행시간: {bus.startTime} - {bus.endTime}</span>
+                      </div>
+                      <div className="passenger-info">
+                        <span>총 탑승객: {bus.totalPassengers || 0}명</span>
+                        <span className={`status ${bus.status === 'COMPLETED' ? 'completed' : bus.status === 'IN_PROGRESS' ? 'in-progress' : 'scheduled'}`}>
+                          {bus.status === 'COMPLETED' ? '완료' : bus.status === 'IN_PROGRESS' ? '운행중' : '예정'}
+                        </span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -302,10 +524,6 @@ function BusOperationInfo() {
                 <span>{selectedBus.routeName || '정보 없음'}</span>
               </div>
               <div className="detail-row">
-                <label>방면:</label>
-                <span>{selectedBus.direction}</span>
-              </div>
-              <div className="detail-row">
                 <label>상태:</label>
                 <span className={`status ${selectedBus.operate ? 'normal' : 'delayed'}`}>
                   {selectedBus.status}
@@ -335,19 +553,42 @@ function BusOperationInfo() {
           </div>
           
           <div className="map-section">
-            <h4>실시간 위치</h4>
-            <div className="map-container">
-              <div className="map-placeholder">
-                {selectedBus.latitude && selectedBus.longitude ? (
-                  <>
-                    <p>위도: {selectedBus.latitude}, 경도: {selectedBus.longitude}</p>
-                    <p>버스 {selectedBus.busNumber}번의 현재 위치</p>
-                  </>
-                ) : (
-                  <p>위치 정보가 없습니다.</p>
-                )}
-              </div>
+            <div className="map-header">
+              <h4>실시간 위치</h4>
+              {isUpdatingLocation && (
+                <span className="update-indicator">
+                  <span className="update-dot"></span>
+                  업데이트 중...
+                </span>
+              )}
             </div>
+            <div className="map-container">
+              {selectedBus.latitude && selectedBus.longitude ? (
+                <div id="bus-location-map" className="kakao-map"></div>
+              ) : (
+                <div className="map-placeholder">
+                  <p>위치 정보가 없습니다.</p>
+                </div>
+              )}
+            </div>
+            {selectedBus.latitude && selectedBus.longitude && (
+              <div className="location-info">
+                <div className="location-row">
+                  <span className="location-label">좌표:</span>
+                  <span className="location-value">{selectedBus.latitude.toFixed(6)}, {selectedBus.longitude.toFixed(6)}</span>
+                </div>
+                <div className="location-row">
+                  <span className="location-label">마지막 업데이트:</span>
+                  <span className="location-value">
+                    {selectedBus.lastUpdateTime ? new Date(selectedBus.lastUpdateTime).toLocaleTimeString() : '정보 없음'}
+                  </span>
+                </div>
+                <div className="location-row">
+                  <span className="location-label">현재 정류장:</span>
+                  <span className="location-value">{selectedBus.currentStationName || '정보 없음'}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -364,57 +605,95 @@ function BusOperationInfo() {
                 <span>{selectedBus.busNumber}</span>
               </div>
               <div className="detail-row">
-                <label>노선:</label>
-                <span>{selectedBus.routeName}</span>
+                <label>실제 번호:</label>
+                <span>{selectedBus.busRealNumber || '정보 없음'}</span>
               </div>
               <div className="detail-row">
-                <label>방면:</label>
-                <span>{selectedBus.direction}</span>
+                <label>노선:</label>
+                <span>{selectedBus.routeName}</span>
               </div>
               <div className="detail-row">
                 <label>기사 이름:</label>
                 <span>{selectedBus.driverName}</span>
               </div>
               <div className="detail-row">
+                <label>운행 날짜:</label>
+                <span>{selectedBus.date}</span>
+              </div>
+              <div className="detail-row">
+                <label>운행 시간:</label>
+                <span>{selectedBus.startTime} - {selectedBus.endTime}</span>
+              </div>
+              <div className="detail-row">
+                <label>상태:</label>
+                <span className={`status ${selectedBus.status === 'COMPLETED' ? 'completed' : selectedBus.status === 'IN_PROGRESS' ? 'in-progress' : 'scheduled'}`}>
+                  {selectedBus.status === 'COMPLETED' ? '완료' : selectedBus.status === 'IN_PROGRESS' ? '운행중' : '예정'}
+                </span>
+              </div>
+              <div className="detail-row">
                 <label>총 탑승객:</label>
-                <span>{selectedBus.totalPassengers}명</span>
+                <span>{selectedBus.totalPassengers || 0}명</span>
               </div>
-              {filterType === 'daily' && (
-                <div className="detail-row">
-                  <label>날짜:</label>
-                  <span>{selectedBus.date}</span>
-                </div>
+              {selectedBus.status === 'COMPLETED' && (
+                <>
+                  <div className="detail-row">
+                    <label>평균 탑승률:</label>
+                    <span>{Math.round((selectedBus.totalPassengers || 0) / (selectedBus.totalSeats || 45) * 100)}%</span>
+                  </div>
+                  <div className="detail-row">
+                    <label>운행 시간:</label>
+                    <span>{calculateOperationDuration(selectedBus.startTime, selectedBus.endTime)}</span>
+                  </div>
+                </>
               )}
-              {filterType === 'weekly' && (
-                <div className="detail-row">
-                  <label>주간:</label>
-                  <span>{selectedBus.date} 포함 주</span>
-                </div>
-              )}
-              {filterType === 'monthly' && (
-                <div className="detail-row">
-                  <label>월:</label>
-                  <span>{operationMonth}</span>
-                </div>
-              )}
-              <div className="detail-row">
-                <label>운행 시작:</label>
-                <span>{selectedBus.startTime}</span>
-              </div>
-              <div className="detail-row">
-                <label>운행 종료:</label>
-                <span>{selectedBus.endTime}</span>
-              </div>
             </div>
           </div>
+          
+          {selectedBus.status === 'COMPLETED' && (
+            <div className="performance-section">
+              <h4>운행 성과</h4>
+              <div className="performance-metrics">
+                <div className="metric">
+                  <span className="metric-label">정시 운행률</span>
+                  <span className="metric-value">95%</span>
+                </div>
+                <div className="metric">
+                  <span className="metric-label">고객 만족도</span>
+                  <span className="metric-value">4.5/5.0</span>
+                </div>
+                <div className="metric">
+                  <span className="metric-label">연료 효율</span>
+                  <span className="metric-value">우수</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
   };
 
+  // 운행 시간 계산 함수
+  const calculateOperationDuration = (startTime, endTime) => {
+    if (!startTime || !endTime) return '정보 없음';
+    
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    let durationMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+    
+    if (durationMinutes < 0) {
+      durationMinutes += 24 * 60; // 다음날로 넘어간 경우
+    }
+    
+    const hours = Math.floor(durationMinutes / 60);
+    const minutes = durationMinutes % 60;
+    
+    return `${hours}시간 ${minutes}분`;
+  };
+
   return (
     <div className="bus-operation-info">
-      <h1>통계</h1>
       
       <div className="filter-section">
         <div className="filter-row">
@@ -586,14 +865,23 @@ function BusOperationInfo() {
           overflow-y: auto;
         }
         
-        .bus-operation-list h3 {
-          margin: 0 0 20px 0;
+        .list-header {
+          margin-bottom: 20px;
+        }
+        
+        .list-header h3 {
+          margin: 0 0 10px 0;
           color: #333;
         }
         
-        .bus-count {
+        .statistics {
           color: #666;
           font-size: 14px;
+        }
+        
+        .statistics .divider {
+          margin: 0 10px;
+          color: #ccc;
         }
         
         .bus-grid {
@@ -623,8 +911,8 @@ function BusOperationInfo() {
         
         .bus-card-header {
           display: flex;
-          justify-content: space-between;
           align-items: center;
+          gap: 10px;
           margin-bottom: 10px;
         }
         
@@ -633,9 +921,15 @@ function BusOperationInfo() {
           color: #333;
         }
         
+        .bus-real-number {
+          color: #666;
+          font-size: 12px;
+        }
+        
         .bus-route {
           color: #666;
           font-size: 14px;
+          margin-left: auto;
         }
         
         .bus-card-body {
@@ -644,12 +938,46 @@ function BusOperationInfo() {
           gap: 5px;
         }
         
+        .time-info {
+          color: #555;
+          font-size: 13px;
+        }
+        
+        .passenger-info {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        
+        .status {
+          font-size: 12px;
+          padding: 2px 8px;
+          border-radius: 4px;
+        }
+        
         .status.normal {
           color: #28a745;
+          background-color: #d4edda;
         }
         
         .status.delayed {
           color: #dc3545;
+          background-color: #f8d7da;
+        }
+        
+        .status.completed {
+          color: #155724;
+          background-color: #d4edda;
+        }
+        
+        .status.in-progress {
+          color: #856404;
+          background-color: #fff3cd;
+        }
+        
+        .status.scheduled {
+          color: #004085;
+          background-color: #cce5ff;
         }
         
         .loading, .error, .empty-list {
@@ -702,24 +1030,128 @@ function BusOperationInfo() {
           color: #333;
         }
         
-        .map-section {
+        .map-section, .performance-section {
           margin-top: 20px;
+        }
+        
+        .map-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+        
+        .map-header h4 {
+          margin: 0;
+        }
+        
+        .update-indicator {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 12px;
+          color: #666;
+        }
+        
+        .update-dot {
+          width: 8px;
+          height: 8px;
+          background-color: #28a745;
+          border-radius: 50%;
+          animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+          0% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: scale(1.2);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
         }
         
         .map-container {
           border: 1px solid #ddd;
           border-radius: 4px;
           overflow: hidden;
+          height: 400px;
+        }
+        
+        .kakao-map {
+          width: 100%;
+          height: 100%;
         }
         
         .map-placeholder {
-          height: 200px;
+          height: 100%;
           background-color: #f8f9fa;
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
           color: #666;
+        }
+        
+        .location-info {
+          margin-top: 10px;
+          padding: 10px;
+          background-color: #f8f9fa;
+          border-radius: 4px;
+        }
+        
+        .location-row {
+          display: flex;
+          margin-bottom: 5px;
+        }
+        
+        .location-row:last-child {
+          margin-bottom: 0;
+        }
+        
+        .location-label {
+          font-weight: 600;
+          min-width: 120px;
+          color: #555;
+          font-size: 13px;
+        }
+        
+        .location-value {
+          color: #333;
+          font-size: 13px;
+        }
+        
+        .performance-metrics {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+          margin-top: 15px;
+        }
+        
+        .metric {
+          text-align: center;
+          padding: 15px;
+          background-color: #f8f9fa;
+          border-radius: 8px;
+        }
+        
+        .metric-label {
+          display: block;
+          color: #666;
+          font-size: 14px;
+          margin-bottom: 5px;
+        }
+        
+        .metric-value {
+          display: block;
+          color: #333;
+          font-size: 20px;
+          font-weight: 600;
         }
         
         .no-selection {

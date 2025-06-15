@@ -83,7 +83,6 @@ function Header({ onLogout }) {
             <span className="user-name">{user.name} 님</span>
           )}
         </span>
-        <Link to="/profile">내 정보</Link>
         <button onClick={handleLogout} className="logout-button">로그아웃</button>
       </div>
     </header>

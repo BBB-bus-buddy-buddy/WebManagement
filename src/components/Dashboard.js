@@ -156,6 +156,26 @@ function Dashboard() {
           totalDrivers = 5; // API 실패 시 기본값
         }
         
+        // 5. 운행 중인 버스 데이터 가져오기 (실제 API 사용)
+        let activeBuses = 0;
+        try {
+          const busesResponse = await ApiService.getAllBuses();
+          console.log('버스 API 응답:', busesResponse);
+          
+          if (busesResponse?.data && Array.isArray(busesResponse.data)) {
+            // status가 'active' 또는 'operating'인 버스만 카운트
+            activeBuses = busesResponse.data.filter(bus => 
+              bus.status === 'active' || bus.status === 'operating' || bus.isOperating === true
+            ).length;
+          } else if (Array.isArray(busesResponse)) {
+            activeBuses = busesResponse.filter(bus => 
+              bus.status === 'active' || bus.status === 'operating' || bus.isOperating === true
+            ).length;
+          }
+        } catch (error) {
+          console.error('운행 중인 버스 데이터 가져오기 실패:', error);
+        }
+        
         // 오늘 탑승객 수 계산 (더미데이터에서)
         const todayPassengers = hourlyPassengerData.reduce((sum, item) => sum + item.passengers, 0);
         
@@ -179,12 +199,6 @@ function Dashboard() {
           totalStations: 50,
           todayPassengers: 5472
         });
-        // 오류 시 기본 노선 데이터
-        setRoutePassengerData([
-          { route: '메인 노선', passengers: 856, color: '#8884d8' },
-          { route: '순환 노선', passengers: 742, color: '#82ca9d' },
-          { route: '지선 노선', passengers: 658, color: '#ffc658' }
-        ]);
       } finally {
         setIsLoading(false);
       }
