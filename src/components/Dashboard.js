@@ -163,13 +163,13 @@ function Dashboard() {
           console.log('버스 API 응답:', busesResponse);
           
           if (busesResponse?.data && Array.isArray(busesResponse.data)) {
-            // status가 'active' 또는 'operating'인 버스만 카운트
+            // operate가 true인 버스만 카운트
             activeBuses = busesResponse.data.filter(bus => 
-              bus.status === 'active' || bus.status === 'operating' || bus.isOperating === true
+              bus.operate === true
             ).length;
           } else if (Array.isArray(busesResponse)) {
             activeBuses = busesResponse.filter(bus => 
-              bus.status === 'active' || bus.status === 'operating' || bus.isOperating === true
+              bus.operate === true
             ).length;
           }
         } catch (error) {
@@ -181,24 +181,15 @@ function Dashboard() {
         
         // 모든 데이터 상태 업데이트
         setStats({
-          activeBuses: Math.floor(totalDrivers * 0.7), // 기사 수의 70%가 운행 중이라고 가정
+          activeBuses: activeBuses, // 기사 수의 70%가 운행 중이라고 가정
           totalDrivers: totalDrivers,
-          totalUsers: totalUsers || 120, // API 실패 시 기본값 사용
-          totalRoutes: totalRoutes || 7, // API 실패 시 기본값 사용
-          totalStations: totalStations || 50, // API 실패 시 기본값 사용
+          totalUsers: totalUsers,
+          totalRoutes: totalRoutes,
+          totalStations: totalStations,
           todayPassengers: todayPassengers
         });
       } catch (error) {
         console.error('대시보드 데이터 가져오기 오류:', error);
-        // 오류 발생 시 기본값으로 설정
-        setStats({
-          activeBuses: 3,
-          totalDrivers: 5,
-          totalUsers: 120,
-          totalRoutes: 7,
-          totalStations: 50,
-          todayPassengers: 5472
-        });
       } finally {
         setIsLoading(false);
       }
