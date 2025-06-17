@@ -284,7 +284,7 @@ function BusDriverManagement() {
               value={searchQuery}
               onChange={handleSearch}
               style={{
-                width: '100%',
+                width: '95%',
                 padding: '12px',
                 border: '1px solid #ddd',
                 borderRadius: '5px',

@@ -22,11 +22,28 @@ function PassengerStats() {
   const [statsPeriod, setStatsPeriod] = useState('daily');
   const [routeFilter, setRouteFilter] = useState('all');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedWeek, setSelectedWeek] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('2025-03');
-  const [dateRange, setDateRange] = useState({
-    start: '2025-03-01',
-    end: '2025-03-07'
+  const [selectedYear, setSelectedYear] = useState('2025');
+  const [selectedMonthOnly, setSelectedMonthOnly] = useState('06');
+  const [selectedMonth, setSelectedMonth] = useState('2025-06');
+  const [monthRange, setMonthRange] = useState(() => {
+    const today = new Date();
+    const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+    return {
+      start: `${sixMonthsAgo.getFullYear()}-${(sixMonthsAgo.getMonth() + 1).toString().padStart(2, '0')}`,
+      end: `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`
+    };
+  });
+  const [weekSelection, setWeekSelection] = useState('all'); // 'all', 'single', 'range'
+  const [selectedWeek, setSelectedWeek] = useState('1');
+  const [weekRange, setWeekRange] = useState({ start: '1', end: '2' });
+  const [dateRange, setDateRange] = useState(() => {
+    const today = new Date();
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(today.getDate() - 13); // 2주 전부터
+    return {
+      start: twoWeeksAgo.toISOString().split('T')[0],
+      end: today.toISOString().split('T')[0]
+    };
   });
   
   // API에서 가져올 실제 데이터
@@ -44,14 +61,6 @@ function PassengerStats() {
     stationStats: []
   });
 
-  // 초기 주차 설정
-  useEffect(() => {
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const weekNum = getWeekNumber(currentDate);
-    setSelectedWeek(`${year}-W${weekNum.toString().padStart(2, '0')}`);
-  }, []);
-
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     fetchInitialData();
@@ -62,37 +71,48 @@ function PassengerStats() {
     if (routes.length > 0 && stations.length > 0) {
       generateDummyPassengerData(routes.slice(1), stations.slice(0, 5));
     }
-  }, [dateRange, selectedWeek, selectedMonth, statsPeriod]);
+  }, [dateRange, monthRange, selectedYear, selectedMonthOnly, selectedWeek, weekRange, weekSelection, statsPeriod]);
 
-  // 주차 번호 계산 함수
-  const getWeekNumber = (date) => {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+  // 월의 주차 계산 함수
+  const getWeekOfMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    
+    // 해당 월의 1일
+    const firstDay = new Date(year, month, 1);
+    const firstDayOfWeek = firstDay.getDay(); // 0=일요일, 1=월요일...
+    
+    // 1일이 속한 주차 계산 (1일이 목요일 이후면 다음 주로 간주)
+    const firstWeekDays = firstDayOfWeek <= 4 ? (8 - firstDayOfWeek) : (15 - firstDayOfWeek);
+    
+    if (day <= firstWeekDays) {
+      return 1;
+    }
+    
+    // 첫 주 이후의 주차 계산
+    return Math.ceil((day - firstWeekDays) / 7) + 1;
   };
 
-  // 주차의 날짜 범위 계산
-  const getWeekDateRange = (weekString) => {
-    if (!weekString) return { start: null, end: null };
+  // 해당 월의 총 주차 수 계산
+  const getMaxWeekOfMonth = (year, month) => {
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const lastDate = new Date(year, month, lastDay);
+    return getWeekOfMonth(lastDate);
+  };
+
+  // 주차 옵션 생성
+  const getWeekOptions = () => {
+    const year = parseInt(selectedYear);
+    const month = parseInt(selectedMonthOnly) - 1;
+    const maxWeeks = getMaxWeekOfMonth(year, month);
+    const options = [];
     
-    const [year, week] = weekString.split('-W');
-    const firstDayOfYear = new Date(parseInt(year), 0, 1);
-    const daysToMonday = (8 - firstDayOfYear.getDay()) % 7;
-    const firstMonday = new Date(firstDayOfYear);
-    firstMonday.setDate(firstDayOfYear.getDate() + daysToMonday);
+    for (let i = 1; i <= maxWeeks; i++) {
+      options.push({ value: i.toString(), label: `${i}주차` });
+    }
     
-    const startDate = new Date(firstMonday);
-    startDate.setDate(firstMonday.getDate() + (parseInt(week) - 1) * 7);
-    
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 6);
-    
-    return {
-      start: startDate.toISOString().split('T')[0],
-      end: endDate.toISOString().split('T')[0]
-    };
+    return options;
   };
 
   // 실제 노선과 정류장 데이터 가져오기
@@ -146,17 +166,24 @@ function PassengerStats() {
       
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
         const dayData = {
-          date: `${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`,
-          total: 0
+          date: `${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`
         };
         
-        routeList.forEach(route => {
+        routeList.forEach((route, index) => {
           // 주말/평일에 따라 다른 패턴
           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          const basePassengers = isWeekend ? 300 : 800;
-          const passengers = Math.floor(Math.random() * 700) + basePassengers;
+          const isRushHour = d.getDay() >= 1 && d.getDay() <= 5; // 평일
+          
+          // 노선별 기본 승객 수 (노선마다 다른 인기도)
+          const routePopularity = [1.5, 1.2, 0.8, 1.0, 0.9, 1.3, 0.7, 1.1, 0.6, 0.8][index % 10];
+          const basePassengers = isWeekend ? 80 * routePopularity : 180 * routePopularity;
+          
+          // 시간대별 변동 (랜덤 + 패턴)
+          const timeVariation = Math.sin((d.getDate() / 30) * Math.PI) * 0.3 + 1;
+          const randomVariation = 0.7 + Math.random() * 0.6; // 0.7 ~ 1.3
+          
+          const passengers = Math.floor(basePassengers * timeVariation * randomVariation);
           dayData[route.id] = passengers;
-          dayData.total += passengers;
         });
         
         dailyData.push(dayData);
@@ -165,72 +192,168 @@ function PassengerStats() {
       setPassengerData(prev => ({ ...prev, daily: dailyData }));
       
     } else if (statsPeriod === 'weekly') {
-      // 주별 데이터 생성 (선택된 주차 기준 4주)
+      // 주별 데이터 생성
+      const year = parseInt(selectedYear);
+      const month = parseInt(selectedMonthOnly) - 1;
+      const maxWeeks = getMaxWeekOfMonth(year, month);
       const weeklyData = [];
-      const [year, weekNum] = selectedWeek.split('-W');
       
-      for (let i = 0; i < 4; i++) {
-        const currentWeek = parseInt(weekNum) - 3 + i;
+      // 표시할 주차 결정
+      let weeksToShow = [];
+      if (weekSelection === 'all') {
+        // 모든 주차
+        for (let i = 1; i <= maxWeeks; i++) {
+          weeksToShow.push(i);
+        }
+      } else if (weekSelection === 'single') {
+        // 선택된 단일 주차 - 최소 3주는 보여주기
+        const selectedWeekNum = parseInt(selectedWeek);
+        const startWeek = Math.max(1, selectedWeekNum - 1);
+        const endWeek = Math.min(maxWeeks, selectedWeekNum + 1);
+        for (let i = startWeek; i <= endWeek; i++) {
+          weeksToShow.push(i);
+        }
+      } else if (weekSelection === 'range') {
+        // 선택된 주차 범위
+        const start = parseInt(weekRange.start);
+        const end = parseInt(weekRange.end);
+        for (let i = start; i <= end; i++) {
+          weeksToShow.push(i);
+        }
+      }
+      
+      weeksToShow.forEach(weekNum => {
         const weekData = {
-          week: `${currentWeek}주차`,
-          total: 0
+          week: `${parseInt(selectedMonthOnly)}월 ${weekNum}주차`
         };
         
-        routeList.forEach(route => {
-          const passengers = Math.floor(Math.random() * 7000) + 3500 + (i * 500);
+        routeList.forEach((route, index) => {
+          // 노선별 다른 승객 패턴
+          const routePopularity = [1.5, 1.2, 0.8, 1.0, 0.9, 1.3, 0.7, 1.1, 0.6, 0.8][index % 10];
+          
+          // 주차별 트렌드 (월 초/중/말에 따른 변화)
+          const weekTrend = weekNum === 1 ? 0.9 : weekNum === maxWeeks ? 0.8 : 1.0;
+          
+          // 기본 주간 승객 수
+          const basePassengers = 1200 * routePopularity * weekTrend;
+          const randomVariation = 0.8 + Math.random() * 0.4; // 0.8 ~ 1.2
+          
+          const passengers = Math.floor(basePassengers * randomVariation);
           weekData[route.id] = passengers;
-          weekData.total += passengers;
         });
         
         weeklyData.push(weekData);
-      }
+      });
       
       setPassengerData(prev => ({ ...prev, weekly: weeklyData }));
       
     } else if (statsPeriod === 'monthly') {
-      // 월별 데이터 생성 (선택된 월 기준 최근 6개월)
+      // 월별 데이터 생성 (선택된 월 범위)
+      const [startYear, startMonth] = monthRange.start.split('-').map(Number);
+      const [endYear, endMonth] = monthRange.end.split('-').map(Number);
       const monthlyData = [];
-      const [year, month] = selectedMonth.split('-');
-      const baseDate = new Date(parseInt(year), parseInt(month) - 1);
       
-      for (let i = 5; i >= 0; i--) {
-        const monthDate = new Date(baseDate);
-        monthDate.setMonth(monthDate.getMonth() - i);
+      // 시작월부터 끝월까지 순회
+      let currentYear = startYear;
+      let currentMonth = startMonth;
+      
+      while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
         const monthData = {
-          month: `${monthDate.getMonth() + 1}월`,
-          total: 0
+          month: `${currentYear}년 ${currentMonth}월`
         };
         
-        routeList.forEach(route => {
+        routeList.forEach((route, index) => {
           // 계절별 패턴 적용
-          const seasonFactor = [0.8, 0.9, 1.0, 1.1, 1.2, 1.1, 1.0, 0.9, 0.8, 0.7, 0.8, 0.9];
-          const monthIndex = monthDate.getMonth();
-          const basePassengers = 25000 * seasonFactor[monthIndex];
-          const passengers = Math.floor(Math.random() * 10000) + basePassengers;
-          monthData[route.id] = Math.floor(passengers);
-          monthData.total += Math.floor(passengers);
+          const seasonFactor = [0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.2, 1.0, 0.9, 0.8, 0.7];
+          const monthIndex = currentMonth - 1;
+          
+          // 노선별 다른 승객 패턴
+          const routePopularity = [1.5, 1.2, 0.8, 1.0, 0.9, 1.3, 0.7, 1.1, 0.6, 0.8][index % 10];
+          
+          const basePassengers = 8500 * seasonFactor[monthIndex] * routePopularity;
+          const randomVariation = 0.85 + Math.random() * 0.3; // 0.85 ~ 1.15
+          
+          const passengers = Math.floor(basePassengers * randomVariation);
+          monthData[route.id] = passengers;
         });
         
         monthlyData.push(monthData);
+        
+        // 다음 월로 이동
+        currentMonth++;
+        if (currentMonth > 12) {
+          currentMonth = 1;
+          currentYear++;
+        }
       }
       
       setPassengerData(prev => ({ ...prev, monthly: monthlyData }));
     }
     
-    // 노선별 탑승객 비율 데이터 (파이차트용)
-    const colors = ['#8884d8', '#83a6ed', '#8dd1e1', '#82ca9d', '#a4de6c', '#ffc658', '#ff7300', '#ff0000', '#00ff00', '#0000ff'];
-    const routeRatioData = routeList.map((route, index) => ({
-      name: route.name,
-      value: Math.floor(Math.random() * 30000) + 15000,
-      color: colors[index % colors.length]
-    }));
+    // 노선별 탑승객 비율 데이터 (파이차트용) - 더 현실적이고 다양한 데이터
+    const colors = ['#8884d8', '#83a6ed', '#8dd1e1', '#82ca9d', '#a4de6c', '#ffc658', '#ff7300', '#e74c3c', '#9b59b6', '#3498db'];
+    const routeRatioData = routeList.map((route, index) => {
+      // 노선별 다른 인기도 패턴
+      const popularity = [1.8, 1.5, 1.2, 1.0, 0.9, 1.3, 0.8, 1.1, 0.7, 0.6][index % 10];
+      const baseValue = 1200;
+      const seasonalFactor = statsPeriod === 'monthly' ? 
+        [0.8, 0.9, 1.0, 1.1, 1.2, 1.1, 1.0, 0.9, 0.8, 0.7, 0.8, 0.9][new Date().getMonth()] : 1.0;
+      
+      return {
+        name: route.name,
+        value: Math.floor(baseValue * popularity * seasonalFactor * (0.8 + Math.random() * 0.4)),
+        color: colors[index % colors.length]
+      };
+    });
     
-    // 정류장별 승하차 데이터
-    const stationStatsData = stationList.map(station => ({
-      station: station.name || `정류장 ${station.id}`,
-      boarding: Math.floor(Math.random() * 2000) + 1000,
-      alighting: Math.floor(Math.random() * 2000) + 1000
-    }));
+    // 정류장별 승하차 데이터 - 더 현실적인 패턴
+    const stationTypes = ['터미널', '대학교', '병원', '쇼핑몰', '주거지역', '공단', '관공서', '학교', '시장', '역사'];
+    const stationStatsData = stationList.map((station, index) => {
+      const stationType = stationTypes[index % stationTypes.length];
+      
+      // 정류장 유형별 승하차 패턴
+      let boardingMultiplier = 1.0;
+      let alightingMultiplier = 1.0;
+      
+      switch(stationType) {
+        case '터미널':
+          boardingMultiplier = 2.0;
+          alightingMultiplier = 1.8;
+          break;
+        case '대학교':
+          boardingMultiplier = 1.5;
+          alightingMultiplier = 1.4;
+          break;
+        case '병원':
+          boardingMultiplier = 1.2;
+          alightingMultiplier = 1.3;
+          break;
+        case '쇼핑몰':
+          boardingMultiplier = 1.3;
+          alightingMultiplier = 1.7;
+          break;
+        case '주거지역':
+          boardingMultiplier = 1.6;
+          alightingMultiplier = 0.8;
+          break;
+        case '공단':
+          boardingMultiplier = 0.7;
+          alightingMultiplier = 1.5;
+          break;
+        default:
+          boardingMultiplier = 1.0;
+          alightingMultiplier = 1.0;
+      }
+      
+      const baseBoarding = 150;
+      const baseAlighting = 140;
+      
+      return {
+        station: `${station.name || `정류장 ${station.id}`} (${stationType})`,
+        boarding: Math.floor(baseBoarding * boardingMultiplier * (0.7 + Math.random() * 0.6)),
+        alighting: Math.floor(baseAlighting * alightingMultiplier * (0.7 + Math.random() * 0.6))
+      };
+    });
     
     setPassengerData(prev => ({
       ...prev,
@@ -242,19 +365,27 @@ function PassengerStats() {
   // 기본 더미 데이터 설정 (API 실패 시)
   const setDefaultDummyData = () => {
     const defaultRoutes = [
-      { id: 'route1', name: '노선 1' },
-      { id: 'route2', name: '노선 2' },
-      { id: 'route3', name: '노선 3' },
-      { id: 'route4', name: '노선 4' },
-      { id: 'route5', name: '노선 5' }
+      { id: 'route1', name: '1번 (시청↔터미널)' },
+      { id: 'route2', name: '2번 (대학교↔공단)' },
+      { id: 'route3', name: '3번 (병원↔신도시)' },
+      { id: 'route4', name: '4번 (역↔쇼핑몰)' },
+      { id: 'route5', name: '5번 (주거지↔시장)' },
+      { id: 'route6', name: '6번 (학교↔공원)' },
+      { id: 'route7', name: '7번 (문화센터↔체육관)' },
+      { id: 'route8', name: '8번 (고속터미널↔신시가지)' }
     ];
     
     const defaultStations = [
-      { id: 'station1', name: '정류장 1' },
-      { id: 'station2', name: '정류장 2' },
-      { id: 'station3', name: '정류장 3' },
-      { id: 'station4', name: '정류장 4' },
-      { id: 'station5', name: '정류장 5' }
+      { id: 'station1', name: '중앙터미널' },
+      { id: 'station2', name: '시청앞' },
+      { id: 'station3', name: '대학교정문' },
+      { id: 'station4', name: '종합병원' },
+      { id: 'station5', name: '쇼핑센터' },
+      { id: 'station6', name: '공단입구' },
+      { id: 'station7', name: '신도시중앙' },
+      { id: 'station8', name: '기차역광장' },
+      { id: 'station9', name: '전통시장' },
+      { id: 'station10', name: '문화회관' }
     ];
     
     setRoutes([{ id: 'all', name: '전체 노선' }, ...defaultRoutes]);
@@ -275,6 +406,93 @@ function PassengerStats() {
     }
   };
   
+  // 툴팁 포맷터 함수
+  const formatTooltip = (value, name, props) => {
+    if (name === 'total') return null; // total은 표시하지 않음
+    
+    const routeName = routes.find(r => r.id === name)?.name || name;
+    return [`${value.toLocaleString()}명`, routeName];
+  };
+
+  // 툴팁 라벨 포맷터
+  const formatTooltipLabel = (label) => {
+    switch(statsPeriod) {
+      case 'daily':
+        return `${label} (일별)`;
+      case 'weekly':
+        return `${label}`;
+      case 'monthly':
+        return `${label}`;
+      default:
+        return label;
+    }
+  };
+
+  // Y축 숫자 포맷 함수
+  const formatYAxisTick = (value) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}M`;
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(1)}K`;
+    }
+    return value.toLocaleString();
+  };
+  
+  // BarChart용 Y축 범위 계산 함수
+  const getBarChartYAxisDomain = () => {
+    const data = passengerData.stationStats;
+    if (!data || data.length === 0) return [0, 'auto'];
+    
+    let maxValue = 0;
+    data.forEach(item => {
+      maxValue = Math.max(maxValue, item.boarding, item.alighting);
+    });
+    
+    return [0, Math.ceil(maxValue * 1.1)];
+  };
+  
+  // Y축 범위 계산 함수
+  const getYAxisDomain = () => {
+    const data = getChartData();
+    if (!data || data.length === 0) return [0, 'auto'];
+    
+    let maxValue = 0;
+    let minValue = Infinity;
+    
+    data.forEach(item => {
+      Object.keys(item).forEach(key => {
+        if (key !== getXAxisKey() && key !== 'total' && typeof item[key] === 'number') {
+          maxValue = Math.max(maxValue, item[key]);
+          minValue = Math.min(minValue, item[key]);
+        }
+      });
+    });
+    
+    // 최소값은 0 또는 실제 최소값의 90%
+    const yMin = Math.max(0, Math.floor(minValue * 0.9));
+    // 최대값은 실제 최대값의 110%로 여백 확보
+    const yMax = Math.ceil(maxValue * 1.1);
+    
+    return [yMin, yMax];
+  };
+  
+  // 총 탑승객 수 계산 함수
+  const getTotalPassengers = () => {
+    const data = getActiveData();
+    if (!data || data.length === 0) return 0;
+    
+    let total = 0;
+    data.forEach(item => {
+      Object.keys(item).forEach(key => {
+        if (key !== getXAxisKey() && typeof item[key] === 'number') {
+          total += item[key];
+        }
+      });
+    });
+    
+    return total;
+  };
+
   // 차트 데이터 가져오기
   const getChartData = () => {
     const data = getActiveData();
@@ -318,11 +536,22 @@ function PassengerStats() {
     // 기간 변경 시 날짜 범위 자동 조정
     if (newPeriod === 'daily') {
       const today = new Date();
-      const weekAgo = new Date(today);
-      weekAgo.setDate(today.getDate() - 6);
+      const twoWeeksAgo = new Date(today);
+      twoWeeksAgo.setDate(today.getDate() - 13); // 2주간의 데이터
       setDateRange({
-        start: weekAgo.toISOString().split('T')[0],
+        start: twoWeeksAgo.toISOString().split('T')[0],
         end: today.toISOString().split('T')[0]
+      });
+    } else if (newPeriod === 'weekly') {
+      // 주별 선택 시 기본값을 전체 주차로 설정
+      setWeekSelection('all');
+    } else if (newPeriod === 'monthly') {
+      // 월별 선택 시 기본값을 최근 6개월로 설정
+      const today = new Date();
+      const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+      setMonthRange({
+        start: `${sixMonthsAgo.getFullYear()}-${(sixMonthsAgo.getMonth() + 1).toString().padStart(2, '0')}`,
+        end: `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`
       });
     }
   };
@@ -339,12 +568,44 @@ function PassengerStats() {
     }));
   };
 
-  const handleWeekChange = (e) => {
+  const handleMonthChange = (e) => {
+    setSelectedMonth(e.target.value);
+  };
+
+  const handleMonthRangeChange = (e) => {
+    const { name, value } = e.target;
+    setMonthRange(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleWeekSelectionChange = (e) => {
+    setWeekSelection(e.target.value);
+  };
+
+  const handleSelectedWeekChange = (e) => {
     setSelectedWeek(e.target.value);
   };
 
-  const handleMonthChange = (e) => {
-    setSelectedMonth(e.target.value);
+  const handleWeekRangeChange = (e) => {
+    const { name, value } = e.target;
+    setWeekRange(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // 빠른 날짜 선택 옵션
+  const setQuickDateRange = (days) => {
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - days + 1);
+    
+    setDateRange({
+      start: startDate.toISOString().split('T')[0],
+      end: today.toISOString().split('T')[0]
+    });
   };
   
   // 차트에 표시할 라인 생성
@@ -424,10 +685,37 @@ function PassengerStats() {
     <div className="passenger-stats">
       <h1>노선별 탑승객 통계</h1>
       
-      <div className="stats-controls">
+      <div className="stats-controls" style={{ 
+        display: 'flex', 
+        flexWrap: 'wrap', 
+        gap: '20px', 
+        padding: '20px', 
+        backgroundColor: '#f8f9fa',
+        borderRadius: '8px',
+        marginBottom: '20px'
+      }}>
         <div className="filter-group">
-          <label style={{ display: 'block', marginBottom: '5px',fontWeight: '500', whiteSpace: 'nowrap' }}>기간 선택:</label>
-          <select value={statsPeriod} onChange={handlePeriodChange} style={{ minWidth: '100px', marginRight: '100px'}}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px',
+            fontWeight: 'bold', 
+            fontSize: '14px',
+            color: '#333'
+          }}>기간 선택</label>
+          <select 
+            value={statsPeriod} 
+            onChange={handlePeriodChange} 
+            style={{ 
+              padding: '8px 12px',
+              border: '2px solid #e0e0e0',
+              borderRadius: '6px',
+              fontSize: '14px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              transition: 'border-color 0.2s',
+              minWidth: '100px'
+            }}
+          >
             <option value="daily">일별</option>
             <option value="weekly">주별</option>
             <option value="monthly">월별</option>
@@ -435,60 +723,426 @@ function PassengerStats() {
         </div>
         
         <div className="filter-group">
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', whiteSpace: 'nowrap' }}>노선 선택:</label>
-          <select value={routeFilter} onChange={handleRouteFilterChange} style={{ minWidth: '150px', marginRight: '100px'}}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            fontWeight: 'bold', 
+            fontSize: '14px',
+            color: '#333'
+          }}>노선 선택</label>
+          <select 
+            value={routeFilter} 
+            onChange={handleRouteFilterChange} 
+            style={{ 
+              padding: '8px 12px',
+              border: '2px solid #e0e0e0',
+              borderRadius: '6px',
+              fontSize: '14px',
+              backgroundColor: 'white',
+              cursor: 'pointer',
+              transition: 'border-color 0.2s',
+              minWidth: '150px'
+            }}
+          >
             {routes.map(route => (
               <option key={route.id} value={route.id}>{route.name}</option>
             ))}
           </select>
         </div>
         
-        <div className="filter-group date-range" style={{ flex: '2' }}>
-          <label style={{ display: 'block', marginBottom: '13px', fontWeight: '500', whiteSpace: 'nowrap' }}>조회 기간:</label>
+        <div className="date-selection-group" style={{ flex: 1, minWidth: '300px' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '8px', 
+            fontWeight: 'bold', 
+            fontSize: '14px',
+            color: '#333'
+          }}>조회 기간</label>
+          
           {statsPeriod === 'daily' && (
-            <div className="date-inputs" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <input 
-                type="date" 
-                name="start" 
-                value={dateRange.start} 
-                onChange={handleDateRangeChange}
-                style={{ padding: '8px', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-              />
-              <span style={{ whiteSpace: 'nowrap' }}>~</span>
-              <input 
-                type="date" 
-                name="end" 
-                value={dateRange.end} 
-                onChange={handleDateRangeChange}
-                min={dateRange.start}
-                style={{ padding: '8px', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-              />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="date" 
+                  name="start" 
+                  value={dateRange.start} 
+                  onChange={handleDateRangeChange}
+                  style={{ 
+                    padding: '8px 12px', 
+                    border: '2px solid #e0e0e0', 
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                />
+                <span style={{ color: '#666', fontWeight: 'bold' }}>~</span>
+                <input 
+                  type="date" 
+                  name="end" 
+                  value={dateRange.end} 
+                  onChange={handleDateRangeChange}
+                  min={dateRange.start}
+                  style={{ 
+                    padding: '8px 12px', 
+                    border: '2px solid #e0e0e0', 
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => setQuickDateRange(7)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#007bff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#007bff';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#007bff';
+                  }}
+                >
+                  최근 7일
+                </button>
+                <button 
+                  onClick={() => setQuickDateRange(14)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#007bff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#007bff';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#007bff';
+                  }}
+                >
+                  최근 14일
+                </button>
+                <button 
+                  onClick={() => setQuickDateRange(30)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#007bff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#007bff';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#007bff';
+                  }}
+                >
+                  최근 30일
+                </button>
+              </div>
             </div>
           )}
+          
           {statsPeriod === 'weekly' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <input 
-                type="week" 
-                value={selectedWeek} 
-                onChange={handleWeekChange}
-                style={{ padding: '8px', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-              />
-              <span style={{ fontSize: '14px', color: '#666' }}>
-                (최근 4주 데이터 표시)
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* 년도와 월 선택 */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="number" 
+                  value={selectedYear} 
+                  onChange={(e) => setSelectedYear(e.target.value)}
+                  min="2000"
+                  max="2030"
+                  placeholder="년도"
+                  style={{ 
+                    padding: '8px 12px', 
+                    border: '2px solid #e0e0e0', 
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    backgroundColor: 'white',
+                    width: '80px'
+                  }}
+                />
+                <span style={{ color: '#666', fontSize: '14px' }}>년</span>
+                <select 
+                  value={selectedMonthOnly} 
+                  onChange={(e) => setSelectedMonthOnly(e.target.value)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    border: '2px solid #e0e0e0', 
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  <option value="01">1월</option>
+                  <option value="02">2월</option>
+                  <option value="03">3월</option>
+                  <option value="04">4월</option>
+                  <option value="05">5월</option>
+                  <option value="06">6월</option>
+                  <option value="07">7월</option>
+                  <option value="08">8월</option>
+                  <option value="09">9월</option>
+                  <option value="10">10월</option>
+                  <option value="11">11월</option>
+                  <option value="12">12월</option>
+                </select>
+              </div>
+              
+              {/* 주차 선택 옵션 */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input 
+                    type="radio" 
+                    id="week-all" 
+                    name="weekSelection" 
+                    value="all" 
+                    checked={weekSelection === 'all'} 
+                    onChange={handleWeekSelectionChange}
+                  />
+                  <label htmlFor="week-all" style={{ fontSize: '14px', cursor: 'pointer' }}>
+                    전체 주차
+                  </label>
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input 
+                    type="radio" 
+                    id="week-single" 
+                    name="weekSelection" 
+                    value="single" 
+                    checked={weekSelection === 'single'} 
+                    onChange={handleWeekSelectionChange}
+                  />
+                  <label htmlFor="week-single" style={{ fontSize: '14px', cursor: 'pointer' }}>
+                    특정 주차
+                  </label>
+                  {weekSelection === 'single' && (
+                    <select 
+                      value={selectedWeek} 
+                      onChange={handleSelectedWeekChange}
+                      style={{ 
+                        padding: '6px 10px', 
+                        border: '2px solid #e0e0e0', 
+                        borderRadius: '4px',
+                        fontSize: '13px',
+                        backgroundColor: 'white'
+                      }}
+                    >
+                      {getWeekOptions().map(option => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input 
+                    type="radio" 
+                    id="week-range" 
+                    name="weekSelection" 
+                    value="range" 
+                    checked={weekSelection === 'range'} 
+                    onChange={handleWeekSelectionChange}
+                  />
+                  <label htmlFor="week-range" style={{ fontSize: '14px', cursor: 'pointer' }}>
+                    주차 범위
+                  </label>
+                  {weekSelection === 'range' && (
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <select 
+                        name="start"
+                        value={weekRange.start} 
+                        onChange={handleWeekRangeChange}
+                        style={{ 
+                          padding: '6px 10px', 
+                          border: '2px solid #e0e0e0', 
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          backgroundColor: 'white'
+                        }}
+                      >
+                        {getWeekOptions().map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: '13px', color: '#666' }}>~</span>
+                      <select 
+                        name="end"
+                        value={weekRange.end} 
+                        onChange={handleWeekRangeChange}
+                        style={{ 
+                          padding: '6px 10px', 
+                          border: '2px solid #e0e0e0', 
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          backgroundColor: 'white'
+                        }}
+                      >
+                        {getWeekOptions().map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
+          
           {statsPeriod === 'monthly' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <input 
-                type="month" 
-                value={selectedMonth} 
-                onChange={handleMonthChange}
-                style={{ padding: '8px', border: '1px solid #e0e0e0', borderRadius: '4px' }}
-              />
-              <span style={{ fontSize: '14px', color: '#666' }}>
-                (최근 6개월 데이터 표시)
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="month" 
+                  name="start"
+                  value={monthRange.start} 
+                  onChange={handleMonthRangeChange}
+                  style={{ 
+                    padding: '8px 12px', 
+                    border: '2px solid #e0e0e0', 
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                />
+                <span style={{ color: '#666', fontWeight: 'bold', margin: '0 8px' }}>~</span>
+                <input 
+                  type="month" 
+                  name="end"
+                  value={monthRange.end} 
+                  onChange={handleMonthRangeChange}
+                  min={monthRange.start}
+                  style={{ 
+                    padding: '8px 12px', 
+                    border: '2px solid #e0e0e0', 
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => {
+                    const today = new Date();
+                    const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+                    setMonthRange({
+                      start: `${sixMonthsAgo.getFullYear()}-${(sixMonthsAgo.getMonth() + 1).toString().padStart(2, '0')}`,
+                      end: `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`
+                    });
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#007bff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#007bff';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#007bff';
+                  }}
+                >
+                  최근 6개월
+                </button>
+                <button 
+                  onClick={() => {
+                    const today = new Date();
+                    const oneYearAgo = new Date(today.getFullYear() - 1, today.getMonth(), 1);
+                    setMonthRange({
+                      start: `${oneYearAgo.getFullYear()}-${(oneYearAgo.getMonth() + 1).toString().padStart(2, '0')}`,
+                      end: `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`
+                    });
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#007bff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#007bff';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#007bff';
+                  }}
+                >
+                  최근 1년
+                </button>
+                <button 
+                  onClick={() => {
+                    const today = new Date();
+                    const currentYear = today.getFullYear();
+                    setMonthRange({
+                      start: `${currentYear}-01`,
+                      end: `${currentYear}-12`
+                    });
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #007bff',
+                    borderRadius: '4px',
+                    backgroundColor: 'white',
+                    color: '#007bff',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#007bff';
+                    e.target.style.color = 'white';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = 'white';
+                    e.target.style.color = '#007bff';
+                  }}
+                >
+                  올해 전체
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -505,8 +1159,14 @@ function PassengerStats() {
               <LineChart data={getChartData()} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey={getXAxisKey()} />
-                <YAxis />
-                <Tooltip />
+                <YAxis 
+                  domain={getYAxisDomain()} 
+                  tickFormatter={formatYAxisTick}
+                />
+                <Tooltip 
+                  formatter={formatTooltip}
+                  labelFormatter={formatTooltipLabel}
+                />
                 <Legend />
                 {renderChartLines()}
               </LineChart>
@@ -535,7 +1195,7 @@ function PassengerStats() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip formatter={(value) => [value.toLocaleString() + '명', '탑승객 수']} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -551,8 +1211,11 @@ function PassengerStats() {
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="station" />
-                  <YAxis />
-                  <Tooltip />
+                  <YAxis 
+                    domain={getBarChartYAxisDomain()} 
+                    tickFormatter={formatYAxisTick}
+                  />
+                  <Tooltip formatter={(value) => [value.toLocaleString() + '명', '']} />
                   <Legend />
                   <Bar dataKey="boarding" name="승차" fill="#8884d8" />
                   <Bar dataKey="alighting" name="하차" fill="#82ca9d" />
@@ -576,7 +1239,6 @@ function PassengerStats() {
                 {routes.slice(1, 6).map(route => (
                   <th key={route.id} style={{ whiteSpace: 'nowrap' }}>{route.name}</th>
                 ))}
-                <th style={{ whiteSpace: 'nowrap' }}>전체</th>
               </tr>
             </thead>
             <tbody>
@@ -588,7 +1250,6 @@ function PassengerStats() {
                       {item[route.id] ? item[route.id].toLocaleString() : '0'}명
                     </td>
                   ))}
-                  <td className="total-column" style={{ whiteSpace: 'nowrap' }}>{item.total?.toLocaleString() || '0'}명</td>
                 </tr>
               ))}
             </tbody>
@@ -602,7 +1263,7 @@ function PassengerStats() {
           <div className="summary-card">
             <h3 style={{ whiteSpace: 'nowrap' }}>총 탑승객</h3>
             <p className="large-number">
-              {getActiveData().reduce((sum, item) => sum + (item.total || 0), 0).toLocaleString()}
+              {getTotalPassengers().toLocaleString()}
               <span>명</span>
             </p>
             <p className="comparison positive">

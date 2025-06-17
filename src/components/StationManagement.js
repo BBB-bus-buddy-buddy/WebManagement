@@ -28,8 +28,8 @@ function StationManagement() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
   const [organizationName, setOrganizationName] = useState('');
+  const [stationAddresses, setStationAddresses] = useState({});
   
   // 주소 정보 state 추가
   const [selectedStationAddress, setSelectedStationAddress] = useState('');
@@ -611,6 +611,57 @@ function StationManagement() {
     }, 500);
   };
 
+  const loadStationAddresses = async (stations) => {
+  if (!geocoderRef.current || !stations || stations.length === 0) {
+    console.log('주소 로딩 조건이 맞지 않음');
+    return;
+  }
+  
+  console.log('정류장 주소 일괄 로딩 시작:', stations.length);
+  
+  const addressPromises = stations.map(station => 
+    new Promise((resolve) => {
+      if (station && station.location && station.location.coordinates) {
+        const lat = station.location.coordinates[0];
+        const lng = station.location.coordinates[1];
+        
+        getAddressFromCoords(lat, lng, (address) => {
+          resolve({ 
+            id: station.id, 
+            address: address || '주소 정보 없음' 
+          });
+        });
+      } else {
+        resolve({ 
+          id: station.id, 
+          address: '좌표 정보 없음' 
+        });
+      }
+    })
+  );
+  
+  try {
+    const addresses = await Promise.all(addressPromises);
+    const addressMap = {};
+    addresses.forEach(({ id, address }) => {
+      addressMap[id] = address;
+    });
+    
+    setStationAddresses(addressMap);
+    console.log('주소 로딩 완료:', addressMap);
+  } catch (error) {
+    console.error('주소 로딩 실패:', error);
+  }
+};
+
+// 3. stations나 mapLoaded가 변경될 때 주소 로딩 (useEffect 추가)
+useEffect(() => {
+  if (stations.length > 0 && geocoderRef.current && mapLoaded) {
+    console.log('주소 로딩 조건 충족, 로딩 시작');
+    loadStationAddresses(stations);
+  }
+}, [stations, mapLoaded]);
+
   // renderStationForm 함수 수정 - 주소 정보 표시 추가
   const renderStationForm = (isEdit = false) => {
     const formData = isEdit ? editStation : newStation;
@@ -717,8 +768,7 @@ function StationManagement() {
                   <div className="station-info">
                     <h3>{station.name}</h3>
                     <p className="station-coords">
-                      위도: {station.location?.coordinates[0]?.toFixed(4)}, 
-                      경도: {station.location?.coordinates[1]?.toFixed(4)}
+                      {stationAddresses[station.id] || '주소 정보를 불러오는 중...'}
                     </p>
                   </div>
                   <button 
