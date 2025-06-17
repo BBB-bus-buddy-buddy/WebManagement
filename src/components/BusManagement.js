@@ -1,4 +1,4 @@
-// components/BusManagement.js - 실제 서버 구조에 맞게 수정
+// components/BusManagement.js - 좌석 수 입력 개선
 import React, { useState, useEffect } from 'react';
 import ApiService from '../services/api';
 import '../styles/Management.css';
@@ -14,16 +14,18 @@ function BusManagement() {
   const [routes, setRoutes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [organizationNames, setOrganizationNames] = useState({}); // 조직 ID별 조직명 캐시
+  
+  // 초기값을 빈 문자열로 변경
   const [editBus, setEditBus] = useState({
     busNumber: '',
     busRealNumber: '',
     routeId: '',
-    totalSeats: 45
+    totalSeats: ''
   });
   const [newBus, setNewBus] = useState({
     busRealNumber: '',
     routeId: '',
-    totalSeats: 45
+    totalSeats: ''
   });
 
   // 컴포넌트 마운트 시 버스 데이터와 노선 데이터 불러오기
@@ -232,7 +234,7 @@ function BusManagement() {
     setShowEditForm(false);
   };
 
-  // 새 버스 추가 클릭 시
+  // 새 버스 추가 클릭 시 - 초기값을 빈 문자열로 변경
   const handleAddBusClick = () => {
     setSelectedBus(null);
     setShowAddForm(true);
@@ -241,7 +243,7 @@ function BusManagement() {
     const initialBusData = {
       busRealNumber: '',
       routeId: routes.length > 0 ? routes[0].id : '',
-      totalSeats: 45
+      totalSeats: ''  // 빈 문자열로 변경
     };
     
     console.log('새 버스 등록 초기 데이터:', initialBusData);
@@ -266,13 +268,21 @@ function BusManagement() {
     }
   };
 
-  // 수정용 입력 필드 변경 처리
+  // 수정용 입력 필드 변경 처리 - 개선된 로직
   const handleBusInputChange = (e) => {
     const { name, value } = e.target;
     
     let processedValue = value;
+    
+    // totalSeats의 경우 문자열 그대로 저장하고, 음수는 허용하지 않음
     if (name === 'totalSeats') {
-      processedValue = parseInt(value) || 0;
+      // 빈 문자열이거나 양의 정수만 허용
+      if (value === '' || (/^\d+$/.test(value) && parseInt(value) >= 0)) {
+        processedValue = value;
+      } else {
+        // 유효하지 않은 입력은 무시하고 이전 값 유지
+        return;
+      }
     }
     
     console.log(`수정 버스 필드 변경: ${name} = ${processedValue}`);
@@ -283,13 +293,21 @@ function BusManagement() {
     });
   };
 
-  // 새 버스용 입력 필드 변경 처리
+  // 새 버스용 입력 필드 변경 처리 - 개선된 로직
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
     let processedValue = value;
+    
+    // totalSeats의 경우 문자열 그대로 저장하고, 음수는 허용하지 않음
     if (name === 'totalSeats') {
-      processedValue = parseInt(value) || 0;
+      // 빈 문자열이거나 양의 정수만 허용
+      if (value === '' || (/^\d+$/.test(value) && parseInt(value) >= 0)) {
+        processedValue = value;
+      } else {
+        // 유효하지 않은 입력은 무시하고 이전 값 유지
+        return;
+      }
     }
     
     console.log(`새 버스 필드 변경: ${name} = ${processedValue}`);
@@ -300,7 +318,7 @@ function BusManagement() {
     });
   };
 
-  // 버스 등록 (실제 서버 스펙에 맞게 수정)
+  // 버스 등록 - 개선된 유효성 검사
   const handleAddBus = async (e) => {
     e.preventDefault();
     
@@ -317,8 +335,15 @@ function BusManagement() {
         alert('노선을 선택해주세요.');
         return;
       }
-      if (!newBus.totalSeats || newBus.totalSeats <= 0) {
-        alert('올바른 좌석 수를 입력해주세요.');
+      
+      // 좌석 수 유효성 검사 개선
+      const totalSeats = parseInt(newBus.totalSeats);
+      if (!newBus.totalSeats || isNaN(totalSeats) || totalSeats < 1) {
+        alert('총 좌석 수는 1 이상의 숫자를 입력해주세요.');
+        return;
+      }
+      if (totalSeats > 100) {
+        alert('총 좌석 수는 100 이하로 입력해주세요.');
         return;
       }
       
@@ -326,7 +351,7 @@ function BusManagement() {
       const busDataToAdd = {
         busRealNumber: newBus.busRealNumber,
         routeId: newBus.routeId,
-        totalSeats: Number(newBus.totalSeats)
+        totalSeats: totalSeats
       };
       
       console.log('전송할 데이터:', busDataToAdd);
@@ -344,12 +369,12 @@ function BusManagement() {
         setNewBus({
           busRealNumber: '',
           routeId: routes.length > 0 ? routes[0].id : '',
-          totalSeats: 45
+          totalSeats: ''  // 빈 문자열로 초기화
         });
         
         // 성공 메시지
         const busNumber = response.busNumber || '알 수 없음';
-        alert(`버스가 성공적으로 등록되었습니다!\n가상 버스 번호: ${busNumber}\n실제 버스 번호: ${newBus.busRealNumber}\n노선: ${getRouteNameById(newBus.routeId)}\n좌석 수: ${newBus.totalSeats}석`);
+        alert(`버스가 성공적으로 등록되었습니다!\n가상 버스 번호: ${busNumber}\n실제 버스 번호: ${newBus.busRealNumber}\n노선: ${getRouteNameById(newBus.routeId)}\n좌석 수: ${totalSeats}석`);
         
         console.log('===== 버스 등록 완료 =====');
       }
@@ -365,7 +390,7 @@ function BusManagement() {
     }
   };
 
-  // 수정 버튼 클릭 시
+  // 수정 버튼 클릭 시 - 초기값 설정 개선
   const handleEditBusClick = () => {
     if (selectedBus) {
       console.log('수정할 버스 선택:', selectedBus);
@@ -374,7 +399,7 @@ function BusManagement() {
         busNumber: selectedBus.busNumber,
         busRealNumber: selectedBus.busRealNumber || '',
         routeId: selectedBus.routeId || '',
-        totalSeats: selectedBus.totalSeats || 45
+        totalSeats: selectedBus.totalSeats ? selectedBus.totalSeats.toString() : ''  // 문자열로 변환
       };
       
       console.log('수정 폼에 설정할 데이터:', busToEdit);
@@ -385,7 +410,7 @@ function BusManagement() {
     }
   };
 
-  // 버스 수정 (실제 서버 스펙에 맞게 수정)
+  // 버스 수정 - 개선된 유효성 검사
   const handleUpdateBus = async (e) => {
     e.preventDefault();
     
@@ -406,8 +431,15 @@ function BusManagement() {
         alert('노선을 선택해주세요.');
         return;
       }
-      if (!editBus.totalSeats || editBus.totalSeats <= 0) {
-        alert('올바른 좌석 수를 입력해주세요.');
+      
+      // 좌석 수 유효성 검사 개선
+      const totalSeats = parseInt(editBus.totalSeats);
+      if (!editBus.totalSeats || isNaN(totalSeats) || totalSeats < 1) {
+        alert('총 좌석 수는 1 이상의 숫자를 입력해주세요.');
+        return;
+      }
+      if (totalSeats > 100) {
+        alert('총 좌석 수는 100 이하로 입력해주세요.');
         return;
       }
       
@@ -416,7 +448,7 @@ function BusManagement() {
         busNumber: editBus.busNumber,
         busRealNumber: editBus.busRealNumber,
         routeId: editBus.routeId,
-        totalSeats: Number(editBus.totalSeats)
+        totalSeats: totalSeats
       };
       
       console.log('전송할 수정 데이터:', busDataToUpdate);
@@ -439,7 +471,7 @@ function BusManagement() {
         setShowEditForm(false);
         
         // 성공 메시지
-        alert(`버스 정보가 성공적으로 수정되었습니다!\n가상 버스 번호: ${editBus.busNumber}\n실제 버스 번호: ${editBus.busRealNumber}\n노선: ${getRouteNameById(editBus.routeId)}\n좌석 수: ${editBus.totalSeats}석`);
+        alert(`버스 정보가 성공적으로 수정되었습니다!\n가상 버스 번호: ${editBus.busNumber}\n실제 버스 번호: ${editBus.busRealNumber}\n노선: ${getRouteNameById(editBus.routeId)}\n좌석 수: ${totalSeats}석`);
         
         console.log('===== 버스 수정 완료 =====');
       }
@@ -670,14 +702,12 @@ function BusManagement() {
                     <div className="form-group">
                       <label htmlFor="edit-totalSeats">총 좌석 수 *</label>
                       <input 
-                        type="number" 
+                        type="text" 
                         id="edit-totalSeats" 
                         name="totalSeats" 
-                        min="1"
-                        max="100"
                         value={editBus.totalSeats} 
                         onChange={handleBusInputChange} 
-                        required 
+                        placeholder="예: 45"
                       />
                       <small className="form-hint">1~100 사이의 숫자를 입력하세요.</small>
                     </div>
@@ -741,14 +771,11 @@ function BusManagement() {
                 <div className="form-group">
                   <label htmlFor="totalSeats">총 좌석 수 *</label>
                   <input
-                    type="number"
+                    type="text"
                     id="totalSeats"
                     name="totalSeats"
-                    min="1"
-                    max="100"
                     value={newBus.totalSeats}
                     onChange={handleInputChange}
-                    required
                     placeholder="예: 45"
                   />
                   <small className="form-hint">1~100 사이의 숫자를 입력하세요.</small>

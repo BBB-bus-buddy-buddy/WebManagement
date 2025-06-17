@@ -195,13 +195,75 @@ static logout() {
   
   // ==================== 버스 기사 배치표 관련 메서드 ====================
   /**
-   * 모든 버스 기사 배치표 조회
-   * @returns {Promise<Array>} 버스 기사 배치표 목록
-   */
-  static async getAllOperationPlans() {
-    const data = await ApiService.apiRequest('operationplan');
+ * 개선된 전체 운행 일정 조회
+ * 페이징이나 필터링 옵션 추가
+ */
+static async getAllOperationPlans(options = {}) {
+  try {
+    console.log('전체 운행 일정 조회:', options);
+    
+    // 기본 전체 조회 시도
+    let endpoint = 'operationplan';
+    const queryParams = [];
+    
+    // 옵션이 있으면 쿼리 파라미터로 추가
+    if (options.limit) {
+      queryParams.push(`limit=${options.limit}`);
+    }
+    if (options.offset) {
+      queryParams.push(`offset=${options.offset}`);
+    }
+    if (options.startDate) {
+      queryParams.push(`startDate=${options.startDate}`);
+    }
+    if (options.endDate) {
+      queryParams.push(`endDate=${options.endDate}`);
+    }
+    
+    if (queryParams.length > 0) {
+      endpoint += '?' + queryParams.join('&');
+    }
+    
+    const data = await ApiService.apiRequest(endpoint);
+    console.log('전체 운행 일정 조회 성공');
     return data;
+  } catch (error) {
+    console.error('전체 운행 일정 조회 실패:', error);
+    throw error;
   }
+}
+
+/**
+ * 날짜 범위별 운행 일정 조회 (새로운 방법)
+ */
+static async getOperationPlansByDateRange(startDate, endDate) {
+  try {
+    console.log('날짜 범위별 조회:', { startDate, endDate });
+    
+    // 방법 1: 전체 조회 후 날짜 범위 필터링
+    const allData = await ApiService.getAllOperationPlans();
+    
+    if (allData && allData.data && Array.isArray(allData.data)) {
+      const filteredData = allData.data.filter(plan => {
+        if (plan.operationDate) {
+          return plan.operationDate >= startDate && plan.operationDate <= endDate;
+        }
+        return false;
+      });
+      
+      console.log(`${startDate} ~ ${endDate} 범위 필터링 결과: ${filteredData.length}개`);
+      return {
+        data: filteredData,
+        message: `${startDate} ~ ${endDate} 범위 운행 일정 ${filteredData.length}개 조회 완료`
+      };
+    }
+    
+    return { data: [], message: '조회 결과 없음' };
+  } catch (error) {
+    console.error('날짜 범위별 조회 실패:', error);
+    throw error;
+  }
+}
   
   /**
    * 단일 버스 기사 배치표 조회
@@ -322,16 +384,6 @@ static async updateOperationPlan(operationPlanData) {
     throw error;
   }
 }
-  
-  /**
-   * 버스 기사 배치표 수정
-   * @param {Object} operationPlanData 수정할 배치표 데이터
-   * @returns {Promise<Object>} 수정된 배치표 정보
-   */
-  static async updateOperationPlan(operationPlanData) {
-    const data = await ApiService.apiRequest('operationplan', 'PUT', operationPlanData);
-    return data;
-  }
   
   /**
    * 버스 기사 배치표 삭제
@@ -1131,20 +1183,6 @@ static async verifyOrganization(code) {
   }
 }
 
-// /**
-//  * 현재 로그인한 사용자의 조직 정보 조회
-//  * @returns {Promise<Object>} 조직 정보
-//  */
-// static async getCurrentOrganization() {
-//   try {
-//     const data = await ApiService.apiRequest('organization/current');
-//     return data;
-//   } catch (error) {
-//     console.error('현재 조직 정보 조회 실패:', error);
-//     throw error;
-//   }
-// }
-// api.js에 추가
 /**
  * 현재 조직의 이용자만 조회
  * @returns {Promise<Object>} 조직 이용자 목록
@@ -1373,20 +1411,115 @@ static async getWeeklyOperationPlans(startDate = null) {
 }
 
 /**
- * 버스 운행 일정 월별 조회
+ * 월별 운행 일정 조회 - 개선된 버전
+ * API 제약사항으로 인해 다른 접근 방식 사용
  */
 static async getMonthlyOperationPlans(yearMonth = null) {
   try {
-    console.log('월별 운행 일정 조회:', yearMonth);
-    let endpoint = 'operation-plan/monthly';
-    if (yearMonth) {
-      endpoint += `?yearMonth=${yearMonth}`;
+    console.log('월별 운행 일정 조회 시도:', yearMonth);
+    
+    if (!yearMonth) {
+      // yearMonth가 없으면 현재 월 사용
+      const now = new Date();
+      yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     }
-    const data = await ApiService.apiRequest(endpoint);
-    return data;
+    
+    // 방법 1: 기본 월별 조회 시도 (현재 월인 경우)
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    if (yearMonth === currentYearMonth) {
+      console.log('현재 월 조회 - 기본 API 사용');
+      try {
+        const data = await ApiService.apiRequest('operation-plan/monthly');
+        console.log('현재 월 API 성공:', data);
+        return data;
+      } catch (error) {
+        console.log('현재 월 API 실패, 대안 방식 사용:', error.message);
+      }
+    }
+    
+    // 방법 2: 전체 조회 후 클라이언트 필터링
+    console.log('전체 조회 후 필터링 방식 사용');
+    try {
+      const allData = await ApiService.getAllOperationPlans();
+      console.log('전체 운행 일정 조회 성공:', allData);
+      
+      if (allData && allData.data && Array.isArray(allData.data)) {
+        // 해당 월의 데이터만 필터링
+        const filteredData = allData.data.filter(plan => {
+          if (plan.operationDate) {
+            const planYearMonth = plan.operationDate.substring(0, 7); // YYYY-MM
+            return planYearMonth === yearMonth;
+          }
+          return false;
+        });
+        
+        console.log(`${yearMonth} 월 필터링 결과: ${filteredData.length}개`);
+        return {
+          data: filteredData,
+          message: `${yearMonth} 월 운행 일정 ${filteredData.length}개 조회 완료`
+        };
+      }
+    } catch (error) {
+      console.log('전체 조회 실패, 일별 조회 시도:', error.message);
+    }
+    
+    // 방법 3: 해당 월의 모든 일자에 대해 일별 조회
+    console.log('일별 조회 방식 사용');
+    const [year, month] = yearMonth.split('-').map(Number);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0); // 해당 월의 마지막 날
+    
+    const monthlyData = [];
+    const currentDate = new Date(startDate);
+    
+    // 해당 월의 모든 날짜에 대해 조회 (최대 31일)
+    const promises = [];
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      promises.push(
+        ApiService.getOperationPlansByDate(dateStr)
+          .then(response => ({
+            date: dateStr,
+            data: response && response.data ? response.data : []
+          }))
+          .catch(error => {
+            console.log(`${dateStr} 일별 조회 실패:`, error.message);
+            return { date: dateStr, data: [] };
+          })
+      );
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // 모든 일별 조회 완료 대기
+    const dailyResults = await Promise.all(promises);
+    
+    // 결과 합치기
+    dailyResults.forEach(result => {
+      if (result.data && Array.isArray(result.data)) {
+        monthlyData.push(...result.data);
+      }
+    });
+    
+    // 중복 제거
+    const uniqueData = monthlyData.filter((plan, index, self) => 
+      index === self.findIndex(p => (p.id || p.operationId) === (plan.id || plan.operationId))
+    );
+    
+    console.log(`${yearMonth} 일별 조회 결과: ${uniqueData.length}개`);
+    return {
+      data: uniqueData,
+      message: `${yearMonth} 월 운행 일정 ${uniqueData.length}개 조회 완료 (일별 조회)`
+    };
+    
   } catch (error) {
-    console.error('월별 운행 일정 조회 실패:', error);
-    throw error;
+    console.error('월별 운행 일정 조회 완전 실패:', error);
+    // 빈 결과 반환
+    return {
+      data: [],
+      message: `${yearMonth} 월 운행 일정 조회 실패: ${error.message}`
+    };
   }
 }
 
@@ -1418,40 +1551,6 @@ static async deleteOperationPlan(id) {
   }
 }
 
-/**
- * 운행 일정 수정 - 데이터 검증 강화
- */
-static async updateOperationPlan(operationPlanData) {
-  try {
-    console.log('운행 일정 수정 요청 (원본):', operationPlanData);
-    
-    // 필수 데이터 검증
-    if (!operationPlanData.id) {
-      throw new Error('운행 일정 ID가 필요합니다.');
-    }
-    
-    // 요청 데이터를 백엔드 DTO 형식에 맞게 변환
-    const requestData = {
-      id: String(operationPlanData.id),
-      busId: String(operationPlanData.busId),
-      busNumber: operationPlanData.busNumber || '',
-      driverId: String(operationPlanData.driverId),
-      routeId: operationPlanData.routeId ? String(operationPlanData.routeId) : '',
-      operationDate: operationPlanData.operationDate, // YYYY-MM-DD 형식
-      startTime: operationPlanData.startTime || '08:00', // HH:MM 형식
-      endTime: operationPlanData.endTime || '17:00', // HH:MM 형식
-      status: operationPlanData.status || 'SCHEDULED'
-    };
-    
-    console.log('최종 수정 요청 데이터:', requestData);
-    
-    const response = await ApiService.apiRequest('operation-plan', 'PUT', requestData);
-    return response;
-  } catch (error) {
-    console.error('운행 일정 수정 실패:', error);
-    throw error;
-  }
-}
 
 /**
  * 디버깅을 위한 데이터 검증 헬퍼 메서드
@@ -1482,6 +1581,50 @@ static validateRouteData(routeData) {
   
   return issues.length === 0;
 }
+
+/**
+ * 캐시를 활용한 월별 조회 (성능 개선)
+ */
+static operationPlanCache = new Map();
+static cacheExpiryTime = 5 * 60 * 1000; // 5분
+
+static async getCachedMonthlyOperationPlans(yearMonth) {
+  const cacheKey = `monthly_${yearMonth}`;
+  const cached = this.operationPlanCache.get(cacheKey);
+  
+  // 캐시가 있고 만료되지 않았으면 캐시 반환
+  if (cached && (Date.now() - cached.timestamp) < this.cacheExpiryTime) {
+    console.log(`캐시에서 ${yearMonth} 데이터 반환`);
+    return cached.data;
+  }
+  
+  // 캐시가 없거나 만료되었으면 새로 조회
+  console.log(`${yearMonth} 데이터 새로 조회`);
+  const data = await this.getMonthlyOperationPlans(yearMonth);
+  
+  // 캐시에 저장
+  this.operationPlanCache.set(cacheKey, {
+    data: data,
+    timestamp: Date.now()
+  });
+  
+  // 캐시 크기 제한 (최대 12개월)
+  if (this.operationPlanCache.size > 12) {
+    const oldestKey = this.operationPlanCache.keys().next().value;
+    this.operationPlanCache.delete(oldestKey);
+  }
+  
+  return data;
+}
+
+/**
+ * 캐시 초기화
+ */
+static clearOperationPlanCache() {
+  this.operationPlanCache.clear();
+  console.log('운행 일정 캐시 초기화 완료');
+}
+
 }
 
 export default ApiService;
