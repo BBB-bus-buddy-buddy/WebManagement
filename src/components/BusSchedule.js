@@ -1,4 +1,4 @@
-// components/BusSchedule.js - 빈 박스 문제 수정 버전
+// components/BusSchedule.js - 상세 모달 및 기사 중복 체크 수정 버전
 import React, { useState, useEffect, useRef } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -9,7 +9,7 @@ import ApiService from '../services/api';
 import '../styles/BusSchedule.css';
 
 /**
- * 버스 기사 배치표 컴포넌트 - 빈 박스 문제 수정 버전
+ * 버스 기사 배치표 컴포넌트 - 상세 모달 및 기사 중복 체크 수정 버전
  */
 function BusSchedule() {
   // FullCalendar 참조
@@ -90,6 +90,62 @@ function BusSchedule() {
     const hour = String(timeObj.hour || 0).padStart(2, '0');
     const minute = String(timeObj.minute || 0).padStart(2, '0');
     return `${hour}:${minute}`;
+  };
+
+  // ✅ 시간 겹침 체크 함수
+  const isTimeOverlap = (start1, end1, start2, end2) => {
+    const startTime1 = new Date(`2000-01-01T${start1}`);
+    const endTime1 = new Date(`2000-01-01T${end1}`);
+    const startTime2 = new Date(`2000-01-01T${start2}`);
+    const endTime2 = new Date(`2000-01-01T${end2}`);
+    
+    return startTime1 < endTime2 && endTime1 > startTime2;
+  };
+
+  // ✅ 기사 중복 시간 체크 함수
+  const checkDriverConflict = (driverId, operationDate, startTime, endTime, excludeId = null) => {
+    const conflicts = schedules.filter(schedule => {
+      // 수정 중인 스케줄은 제외
+      if (excludeId && (schedule.id === excludeId || schedule.operationId === excludeId)) {
+        return false;
+      }
+      
+      // 같은 기사, 같은 날짜인지 확인
+      if (String(schedule.driverId) !== String(driverId) || schedule.operationDate !== operationDate) {
+        return false;
+      }
+      
+      // 시간 겹침 체크
+      const scheduleStartTime = timeObjectToString(schedule.startTime);
+      const scheduleEndTime = timeObjectToString(schedule.endTime);
+      
+      return isTimeOverlap(startTime, endTime, scheduleStartTime, scheduleEndTime);
+    });
+    
+    return conflicts;
+  };
+
+  // ✅ 버스 중복 시간 체크 함수
+  const checkBusConflict = (busNumber, operationDate, startTime, endTime, excludeId = null) => {
+    const conflicts = schedules.filter(schedule => {
+      // 수정 중인 스케줄은 제외
+      if (excludeId && (schedule.id === excludeId || schedule.operationId === excludeId)) {
+        return false;
+      }
+      
+      // 같은 버스, 같은 날짜인지 확인
+      if (String(schedule.busNumber) !== String(busNumber) || schedule.operationDate !== operationDate) {
+        return false;
+      }
+      
+      // 시간 겹침 체크
+      const scheduleStartTime = timeObjectToString(schedule.startTime);
+      const scheduleEndTime = timeObjectToString(schedule.endTime);
+      
+      return isTimeOverlap(startTime, endTime, scheduleStartTime, scheduleEndTime);
+    });
+    
+    return conflicts;
   };
 
   // ✅ 스케줄 데이터 유효성 검증 함수
@@ -717,10 +773,12 @@ function BusSchedule() {
     setShowModal(true);
   };
 
-  // 이벤트 클릭 핸들러
+  // ✅ 개선된 이벤트 클릭 핸들러 - 상세 정보 표시
   const handleEventClick = (info) => {
     const event = info.event;
     const extendedProps = event.extendedProps;
+    
+    console.log('📋 이벤트 클릭됨:', extendedProps);
     
     const driver = drivers.find(d => String(d.id) === String(extendedProps.driverId));
     const bus = buses.find(b => String(b.busNumber) === String(extendedProps.busNumber));
@@ -742,15 +800,18 @@ function BusSchedule() {
       }
     }
     
-    setSelectedSchedule({
+    const scheduleDetail = {
       ...extendedProps,
       driverName: extendedProps.driverName || driver?.name || '미지정',
       busNumber: extendedProps.busNumber || bus?.busNumber || '미지정',
       busRealNumber: extendedProps.busRealNumber || bus?.busRealNumber || '',
       routeName: routeName || '미지정',
       routeId: extendedProps.routeId || bus?.routeId || ''
-    });
+    };
     
+    console.log('📋 상세 정보 설정:', scheduleDetail);
+    
+    setSelectedSchedule(scheduleDetail);
     setCurrentEditingEvent(event);
     setShowDetailModal(true);
   };
@@ -801,7 +862,7 @@ function BusSchedule() {
     });
   };
 
-  // 스케줄 추가/수정 제출 함수
+  // ✅ 개선된 스케줄 추가/수정 제출 함수 - 중복 체크 강화
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -817,6 +878,47 @@ function BusSchedule() {
       
       if (!formData.busNumber) {
         alert('버스를 선택해주세요.');
+        setLoading(false);
+        return;
+      }
+
+      // ✅ 기사 중복 시간 체크
+      const excludeId = modalMode === 'edit' ? (formData.id || selectedSchedule?.id) : null;
+      const driverConflicts = checkDriverConflict(
+        formData.driverId, 
+        formData.operationDate, 
+        formData.startTime, 
+        formData.endTime, 
+        excludeId
+      );
+
+      if (driverConflicts.length > 0) {
+        const conflictInfo = driverConflicts.map(conflict => {
+          const driverName = conflict.driverName || drivers.find(d => String(d.id) === String(conflict.driverId))?.name || '미지정';
+          return `${conflict.operationDate} ${timeObjectToString(conflict.startTime)}-${timeObjectToString(conflict.endTime)} (${driverName})`;
+        }).join('\n');
+        
+        alert(`❌ 기사 중복 시간 충돌이 발견되었습니다!\n\n선택한 기사가 이미 다음 시간에 배정되어 있습니다:\n\n${conflictInfo}\n\n다른 시간이나 다른 기사를 선택해주세요.`);
+        setLoading(false);
+        return;
+      }
+
+      // ✅ 버스 중복 시간 체크
+      const busConflicts = checkBusConflict(
+        formData.busNumber, 
+        formData.operationDate, 
+        formData.startTime, 
+        formData.endTime, 
+        excludeId
+      );
+
+      if (busConflicts.length > 0) {
+        const conflictInfo = busConflicts.map(conflict => {
+          const driverName = conflict.driverName || drivers.find(d => String(d.id) === String(conflict.driverId))?.name || '미지정';
+          return `${conflict.operationDate} ${timeObjectToString(conflict.startTime)}-${timeObjectToString(conflict.endTime)} (${driverName})`;
+        }).join('\n');
+        
+        alert(`❌ 버스 중복 시간 충돌이 발견되었습니다!\n\n선택한 버스가 이미 다음 시간에 사용되고 있습니다:\n\n${conflictInfo}\n\n다른 시간이나 다른 버스를 선택해주세요.`);
         setLoading(false);
         return;
       }
@@ -856,9 +958,30 @@ function BusSchedule() {
               if (firstDate === null) firstDate = new Date(currentDate);
               lastDate = new Date(currentDate);
               
+              // ✅ 반복 스케줄도 중복 체크
+              const currentDateStr = currentDate.toISOString().split('T')[0];
+              const weeklyDriverConflicts = checkDriverConflict(
+                formData.driverId, 
+                currentDateStr, 
+                formData.startTime, 
+                formData.endTime
+              );
+              
+              const weeklyBusConflicts = checkBusConflict(
+                formData.busNumber, 
+                currentDateStr, 
+                formData.startTime, 
+                formData.endTime
+              );
+              
+              if (weeklyDriverConflicts.length > 0 || weeklyBusConflicts.length > 0) {
+                console.log(`📝 ⚠️ ${week + 1}주차 (${currentDateStr}) 중복으로 건너뜀`);
+                continue;
+              }
+              
               const weeklyRequestData = {
                 ...baseRequestData,
-                operationDate: currentDate.toISOString().split('T')[0],
+                operationDate: currentDateStr,
                 recurring: true,
                 recurringWeeks: formData.recurringWeeks,
                 startTime: formData.startTime,
@@ -881,11 +1004,11 @@ function BusSchedule() {
           }
           
           if (successCount.length === formData.recurringWeeks) {
-            alert(`${formData.recurringWeeks}주 동안의 반복 스케줄이 모두 추가되었습니다!`);
+            alert(`✅ ${formData.recurringWeeks}주 동안의 반복 스케줄이 모두 추가되었습니다!`);
           } else if (successCount.length > 0) {
-            alert(`총 ${formData.recurringWeeks}주 중 ${successCount.length}주 스케줄이 추가되었습니다.`);
+            alert(`⚠️ 총 ${formData.recurringWeeks}주 중 ${successCount.length}주 스케줄이 추가되었습니다.\n(중복 시간은 자동으로 건너뛰었습니다)`);
           } else {
-            alert('반복 스케줄 추가에 실패했습니다.');
+            alert('❌ 반복 스케줄 추가에 실패했습니다.');
           }
         } else {
           const requestData = {
@@ -896,7 +1019,7 @@ function BusSchedule() {
           };
           
           const response = await ApiService.addOperationPlan(requestData);
-          alert(response?.message || '운행 배치가 추가되었습니다!');
+          alert(response?.message || '✅ 운행 배치가 추가되었습니다!');
           
           const singleDate = new Date(formData.operationDate);
           await refreshAffectedMonths(singleDate, singleDate);
@@ -923,7 +1046,7 @@ function BusSchedule() {
         };
         
         const response = await ApiService.updateOperationPlan(requestData);
-        alert(response?.message || '운행 배치가 수정되었습니다!');
+        alert(response?.message || '✅ 운행 배치가 수정되었습니다!');
         
         const updateDate = new Date(formData.operationDate);
         await refreshAffectedMonths(updateDate, updateDate);
@@ -935,7 +1058,7 @@ function BusSchedule() {
       console.log('📝 ✅ 폼 제출 완료');
     } catch (error) {
       console.error('📝 ❌ 폼 제출 실패:', error);
-      alert('스케줄 저장에 실패했습니다: ' + error.message);
+      alert('❌ 스케줄 저장에 실패했습니다: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -960,14 +1083,14 @@ function BusSchedule() {
         await refreshAffectedMonths(deleteDate, deleteDate);
         
         setShowDetailModal(false);
-        alert(response?.message || '운행 배치가 삭제되었습니다.');
+        alert(response?.message || '✅ 운행 배치가 삭제되었습니다.');
       } catch (error) {
         console.error('스케줄 삭제 실패:', error);
         
         if (error.message.includes('404')) {
           alert('해당 운행 일정을 찾을 수 없습니다.');
         } else {
-          alert('스케줄 삭제에 실패했습니다: ' + error.message);
+          alert('❌ 스케줄 삭제에 실패했습니다: ' + error.message);
         }
       } finally {
         setLoading(false);
@@ -1180,9 +1303,237 @@ function BusSchedule() {
         </div>
       </div>
       
-      {/* 기존 모달들과 스타일은 그대로 유지 */}
+      {/* ✅ 스케줄 추가/수정 모달 */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{modalMode === 'add' ? '운행 배치 추가' : '운행 배치 수정'}</h3>
+              <button type="button" className="close-btn" onClick={() => setShowModal(false)}>×</button>
+            </div>
+            
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>운행 날짜 *</label>
+                <input
+                  type="date"
+                  name="operationDate"
+                  value={formData.operationDate}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>시작 시간 *</label>
+                  <input
+                    type="time"
+                    name="startTime"
+                    value={formData.startTime}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>종료 시간 *</label>
+                  <input
+                    type="time"
+                    name="endTime"
+                    value={formData.endTime}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="form-group">
+                <label>기사 선택 *</label>
+                <select
+                  name="driverId"
+                  value={formData.driverId}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">기사를 선택하세요</option>
+                  {drivers.map(driver => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.name} - {driver.licenseNumber || '면허번호 미등록'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label>버스 선택 *</label>
+                <select
+                  name="busNumber"
+                  value={formData.busNumber}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">버스를 선택하세요</option>
+                  {buses.map(bus => (
+                    <option key={bus.id} value={bus.busNumber}>
+                      {bus.busNumber}번 - {bus.busRealNumber || bus.busNumber} 
+                      {bus.routeName && ` (${bus.routeName})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label>노선</label>
+                <input
+                  type="text"
+                  name="routeName"
+                  value={formData.routeName}
+                  onChange={handleInputChange}
+                  placeholder="노선명 (버스 선택 시 자동 입력)"
+                  readOnly
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>상태</label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleInputChange}
+                >
+                  <option value="스케줄 등록됨">스케줄 등록됨</option>
+                  <option value="운행 중">운행 중</option>
+                  <option value="운행 완료">운행 완료</option>
+                  <option value="운행 취소">운행 취소</option>
+                </select>
+              </div>
+              
+              {modalMode === 'add' && (
+                <>
+                  <div className="form-group">
+                    <label>
+                      <input
+                        type="checkbox"
+                        name="isRecurring"
+                        checked={formData.isRecurring}
+                        onChange={handleInputChange}
+                      />
+                      반복 스케줄로 등록
+                    </label>
+                  </div>
+                  
+                  {formData.isRecurring && (
+                    <div className="form-group">
+                      <label>반복 주수</label>
+                      <select
+                        name="recurringWeeks"
+                        value={formData.recurringWeeks}
+                        onChange={handleInputChange}
+                      >
+                        <option value={1}>1주</option>
+                        <option value={2}>2주</option>
+                        <option value={3}>3주</option>
+                        <option value={4}>4주</option>
+                        <option value={8}>8주</option>
+                        <option value={12}>12주</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  취소
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? '처리 중...' : (modalMode === 'add' ? '추가' : '수정')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* ✅ 상세 정보 모달 - 수정된 버전 */}
+      {showDetailModal && selectedSchedule && (
+        <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
+          <div className="modal-content detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🚌 운행 배치 상세 정보</h3>
+              <button type="button" className="close-btn" onClick={() => setShowDetailModal(false)}>×</button>
+            </div>
+            
+            <div className="detail-content">
+              <div className="detail-section">
+                <h4>📅 운행 정보</h4>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">운행 날짜:</span>
+                    <span className="value">{selectedSchedule.operationDate}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">운행 시간:</span>
+                    <span className="value">
+                      {timeObjectToString(selectedSchedule.startTime)} - {timeObjectToString(selectedSchedule.endTime)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="detail-section">
+                <h4>👤 기사 정보</h4>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">기사명:</span>
+                    <span className="value">{selectedSchedule.driverName || '미지정'}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="detail-section">
+                <h4>🚌 버스 정보</h4>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">버스 번호:</span>
+                    <span className="value">{selectedSchedule.busNumber || '미지정'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">실제 번호:</span>
+                    <span className="value">{selectedSchedule.busRealNumber || '미지정'}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="detail-section">
+                <h4>🛣️ 노선 정보</h4>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">노선명:</span>
+                    <span className="value">{selectedSchedule.routeName || '미지정'}</span>
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+            
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowDetailModal(false)}>
+                닫기
+              </button>
+              <button type="button" className="btn btn-warning" onClick={handleEdit}>
+                ✏️ 수정
+              </button>
+              <button type="button" className="btn btn-danger" onClick={handleDelete} disabled={loading}>
+                {loading ? '삭제 중...' : '🗑️ 삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <style jsx>{`
-        /* 기존 스타일과 동일 */
+        /* 기본 스타일 */
         .schedule-stats {
           display: flex;
           gap: 20px;
@@ -1213,18 +1564,6 @@ function BusSchedule() {
           border: 1px solid #dee2e6;
         }
         
-        .legend h4 {
-          margin-top: 0;
-          margin-bottom: 10px;
-          color: #495057;
-        }
-        
-        .legend h5 {
-          margin: 10px 0 8px 0;
-          color: #495057;
-          font-size: 14px;
-        }
-        
         .legend-items {
           display: flex;
           gap: 20px;
@@ -1245,14 +1584,284 @@ function BusSchedule() {
           border: 1px solid rgba(0,0,0,0.1);
         }
         
-        .legend-color.current-month {
-          box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+        /* 모달 스타일 */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
         }
         
-        .legend-color.other-month {
-          opacity: 0.7;
+        .modal-content {
+          background: white;
+          border-radius: 12px;
+          padding: 0;
+          max-width: 600px;
+          width: 90%;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
         
+        .detail-modal {
+          max-width: 700px;
+        }
+        
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 20px 24px;
+          border-bottom: 1px solid #e9ecef;
+          background-color: #f8f9fa;
+          border-radius: 12px 12px 0 0;
+        }
+        
+        .modal-header h3 {
+          margin: 0;
+          color: #2c3e50;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+        
+        .close-btn {
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #6c757d;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          transition: all 0.2s ease;
+        }
+        
+        .close-btn:hover {
+          background-color: #e9ecef;
+          color: #495057;
+        }
+        
+        /* 폼 스타일 */
+        form {
+          padding: 24px;
+        }
+        
+        .form-group {
+          margin-bottom: 20px;
+        }
+        
+        .form-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+        
+        label {
+          display: block;
+          margin-bottom: 6px;
+          font-weight: 500;
+          color: #495057;
+          font-size: 14px;
+        }
+        
+        input, select, textarea {
+          width: 100%;
+          padding: 10px 12px;
+          border: 1px solid #ced4da;
+          border-radius: 6px;
+          font-size: 14px;
+          transition: border-color 0.2s ease;
+          box-sizing: border-box;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+          outline: none;
+          border-color: #3498db;
+          box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+        }
+        
+        input[type="checkbox"] {
+          width: auto;
+          margin-right: 8px;
+        }
+        
+        /* 상세 모달 스타일 */
+        .detail-content {
+          padding: 24px;
+        }
+        
+        .detail-section {
+          margin-bottom: 24px;
+          padding-bottom: 20px;
+          border-bottom: 1px solid #e9ecef;
+        }
+        
+        .detail-section:last-child {
+          border-bottom: none;
+          margin-bottom: 0;
+        }
+        
+        .detail-section h4 {
+          margin: 0 0 16px 0;
+          color: #2c3e50;
+          font-size: 1.1rem;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .detail-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+        
+        .detail-item {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        
+        .detail-item .label {
+          font-size: 12px;
+          font-weight: 500;
+          color: #6c757d;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        .detail-item .value {
+          font-size: 14px;
+          color: #2c3e50;
+          font-weight: 500;
+          background-color: #f8f9fa;
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid #e9ecef;
+        }
+        
+        /* 상태별 색상 */
+        .status-스케줄-등록됨 {
+          background-color: #e3f2fd !important;
+          color: #1976d2 !important;
+          border-color: #2196f3 !important;
+        }
+        
+        .status-운행-중 {
+          background-color: #fff3e0 !important;
+          color: #f57c00 !important;
+          border-color: #ff9800 !important;
+        }
+        
+        .status-운행-완료 {
+          background-color: #e8f5e8 !important;
+          color: #2e7d32 !important;
+          border-color: #4caf50 !important;
+        }
+        
+        .status-운행-취소 {
+          background-color: #ffebee !important;
+          color: #c62828 !important;
+          border-color: #f44336 !important;
+        }
+        
+        /* 모달 푸터 */
+        .modal-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          padding: 20px 24px;
+          border-top: 1px solid #e9ecef;
+          background-color: #f8f9fa;
+          border-radius: 0 0 12px 12px;
+        }
+        
+        /* 버튼 스타일 */
+        .btn {
+          padding: 10px 20px;
+          border: none;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        
+        .btn-primary {
+          background-color: #3498db;
+          color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+          background-color: #2980b9;
+          transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+          background-color: #6c757d;
+          color: white;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+          background-color: #5a6268;
+        }
+        
+        .btn-warning {
+          background-color: #f39c12;
+          color: white;
+        }
+        
+        .btn-warning:hover:not(:disabled) {
+          background-color: #e67e22;
+        }
+        
+        .btn-danger {
+          background-color: #e74c3c;
+          color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+          background-color: #c0392b;
+        }
+        
+        .btn-success {
+          background-color: #27ae60;
+          color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+          background-color: #219a52;
+        }
+        
+        .btn-info {
+          background-color: #3498db;
+          color: white;
+        }
+        
+        .btn-info:hover:not(:disabled) {
+          background-color: #2980b9;
+        }
+        
+        /* 캘린더 스타일 */
         .fc-event.current-month-event {
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
           border-width: 2px !important;
@@ -1283,119 +1892,31 @@ function BusSchedule() {
           box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
         }
         
-        .fc-event.current-month-event:hover {
-          opacity: 0.9 !important;
-        }
-        
-        .fc-event.other-month-event:hover {
-          opacity: 0.8 !important;
-        }
-        
-        .fc-daygrid-event {
-          white-space: normal !important;
-          align-items: normal !important;
-        }
-        
-        .fc-daygrid-event-dot {
-          display: none;
-        }
-        
-        .fc-event-time {
-          font-size: 10px;
-          display: block;
-        }
-        
-        .fc-timegrid .fc-scrollgrid-section-header {
-          display: none !important;
-        }
-        
-        .fc-timegrid-axis {
-          border-right: 1px solid #ddd !important;
-        }
-        
-        .fc-timegrid-slot-label {
-          font-size: 12px !important;
-          color: #666 !important;
-          padding: 8px 4px !important;
-        }
-        
-        .fc-view-harness.fc-view-harness-active[data-view-type="dayGridWeek"] .fc-timegrid-axis,
-        .fc-view-harness.fc-view-harness-active[data-view-type="dayGridWeek"] .fc-timegrid-slot-label {
-          display: none !important;
-        }
-        
-        .fc-timegrid-event {
-          border-radius: 4px !important;
-          margin: 1px !important;
-        }
-        
-        .fc-timegrid-event-harness {
-          margin-right: 2px !important;
-        }
-        
-        .fc-timegrid-slot {
-          border-bottom: 1px solid #f0f0f0 !important;
-        }
-        
-        .fc-timegrid-slot:nth-child(even) {
-          background-color: #fafafa !important;
-        }
-        
-        .fc-dayGridWeek-view .fc-daygrid-event {
-          margin: 1px 2px !important;
-          border-radius: 4px !important;
-        }
-        
-        .fc-daygrid-body {
-          min-height: 400px;
-        }
-        
-        .fc-timeGridDay-view {
-          min-height: 600px;
-        }
-        
-        .fc-dayGridWeek-view {
-          min-height: 500px;
-        }
-        
-        .fc-toolbar-title {
-          font-size: 1.5em !important;
-          font-weight: 600 !important;
-          color: #2c3e50 !important;
-        }
-        
-        .fc-button-primary {
-          background-color: #3498db !important;
-          border-color: #2980b9 !important;
-        }
-        
-        .fc-button-primary:hover {
-          background-color: #2980b9 !important;
-        }
-        
-        .fc-button-active {
-          background-color: #2c3e50 !important;
-          border-color: #34495e !important;
-        }
-        
-        .fc-timegrid-event .fc-event-main {
-          overflow: hidden !important;
-          text-overflow: ellipsis !important;
-        }
-        
-        .fc-dayGridWeek-view .fc-col-header-cell {
-          background-color: #f8f9fa !important;
-          border-bottom: 2px solid #dee2e6 !important;
-          font-weight: 600 !important;
-        }
-        
-        .fc-timegrid-now-indicator-line {
-          border-top: 2px solid #e74c3c !important;
-        }
-        
-        .fc-timegrid-now-indicator-arrow {
-          border-left-color: #e74c3c !important;
-          border-right-color: #e74c3c !important;
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+          .modal-content {
+            width: 95%;
+            margin: 10px;
+          }
+          
+          .detail-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .form-row {
+            grid-template-columns: 1fr;
+          }
+          
+          .schedule-stats {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+          }
+          
+          .legend-items {
+            flex-direction: column;
+            gap: 10px;
+          }
         }
       `}</style>
     </div>
